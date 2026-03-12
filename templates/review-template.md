@@ -1,0 +1,76 @@
+# [TITLE]
+
+## Abstract
+
+[150-300 words. Research question, method, key findings, implications.]
+
+## 1. Introduction
+
+[Research question and motivation. Scope and boundaries. Structure of the review.]
+
+## 2. Methodology
+
+### 2.1 Search Strategy
+
+[Protocol summary: search terms, databases queried, date range.]
+
+### 2.2 Selection Criteria
+
+[Inclusion and exclusion criteria from protocol.]
+
+### 2.3 Screening Process
+
+[Screening procedure and statistics: candidates screened, included, excluded, flagged.]
+
+### 2.4 Snowballing
+
+[Snowballing procedure: depth levels, papers examined, saturation metrics.]
+
+### 2.5 Data Extraction
+
+[Extraction schema description. Fields extracted from each paper.]
+
+### 2.6 Threats to Validity
+
+[Limitations of the review methodology itself.]
+
+## 3. Results
+
+### 3.1 Search and Screening Results
+
+[PRISMA-style flow: candidates → screened → included → snowballed. Statistics table.]
+
+```
+Candidates identified: [N]
+After deduplication: [N]
+Screened: [N]
+Included after screening: [N]
+Added via snowballing: [N]
+Final included: [N]
+```
+
+### 3.2 Findings by Theme
+
+[One subsection per theme derived from concept clusters. Within each theme: state of knowledge, consensus, contradictions, gaps. Every claim cites specific papers using [@bibtex_key] format.]
+
+## 4. Discussion
+
+[Synthesis across themes. Identified research gaps. Implications for practice. Limitations of this review.]
+
+## 5. Conclusion
+
+[Explicit answers to each research sub-question: answered, partially answered, or identified as gap. Recommended directions.]
+
+## References
+
+[BibTeX-keyed citations. Full bibliography in references.bib.]
+
+## Appendix A: Included Papers
+
+| ID | Title | Authors | Year | Venue | Relevance |
+|----|-------|---------|------|-------|-----------|
+| | | | | | |
+
+## Appendix B: Concept Matrix
+
+[Reproduced or referenced from concept-matrix.md]
