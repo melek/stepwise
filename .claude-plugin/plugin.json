@@ -1,0 +1,9 @@
+{
+  "name": "scholar",
+  "version": "0.1.0",
+  "description": "Autonomous systematic literature review following the Kitchenham protocol",
+  "author": {
+    "name": "Melek"
+  },
+  "license": "MIT"
+}
