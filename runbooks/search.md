@@ -95,7 +95,7 @@ For candidates found only on Semantic Scholar (no arXiv ID):
 - If yes: download the paper (Step 5)
 
 ### Step 7: Write Final Candidates
-Write all deduplicated candidates to `{workspace}/data/candidates.jsonl` (one JSON object per line).
+Append all deduplicated candidates to `{workspace}/data/candidates.jsonl` (one JSON object per line). If the file already exists (e.g., from a prior partial run), append only candidates not already present (check by canonical ID).
 
 ### Step 8: Report
 Print summary:

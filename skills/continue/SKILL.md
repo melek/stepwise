@@ -2,7 +2,7 @@
 name: continue
 description: Resume an existing systematic literature review from where it left off.
 argument-hint: "[project-slug]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_citation, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers, mcp__zotero__zotero_search, mcp__zotero__zotero_get_item, mcp__zotero__zotero_list_collections, mcp__zotero__zotero_get_collection_items
 ---
 
 # Continue Skill — Resume Literature Review

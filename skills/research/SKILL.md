@@ -2,7 +2,7 @@
 name: research
 description: Start a new systematic literature review. Refines research question into protocol, then executes autonomous multi-phase review.
 argument-hint: "[research question in quotes]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_citation, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers, mcp__zotero__zotero_search, mcp__zotero__zotero_get_item, mcp__zotero__zotero_list_collections, mcp__zotero__zotero_get_collection_items
 ---
 
 # Scholar: Research Skill Orchestrator
@@ -284,7 +284,7 @@ After protocol approval, execute phases 1 through 5 sequentially without interru
 
 ### Determining Where to Start
 
-Read `{WORKSPACE}/state.json`. Start from `current_phase`. If `phase_status` is `"pending"` or `"in_progress"`, execute that phase. If `phase_status` is `"complete"`, advance to the next phase.
+Read `{WORKSPACE}/state.json`. Start from `current_phase`. If `phase_status` is `"pending"` or `"in_progress"`, execute that phase. If `phase_status` is `"completed"`, advance to the next phase.
 
 ### The Execution Loop
 
@@ -296,6 +296,7 @@ Update `{WORKSPACE}/state.json`:
 - `current_phase`: N
 - `phase_status`: `"in_progress"`
 - `updated_at`: current ISO-8601 timestamp
+- Append to `phase_history`: `{"phase": N, "started_at": "{ISO-8601}", "completed_at": null, "agent_id": null, "work_units_completed": 0, "notes": null}`
 
 **Step B: Log phase_start**
 
@@ -322,8 +323,9 @@ After the agent returns, run the postcondition checks for that phase as specifie
    {"event": "phase_complete", "phase": N, "phase_name": "{name}", "timestamp": "{ISO-8601}", "metrics": {<current metrics snapshot>}}
    ```
 3. Update state.json:
-   - `phase_status`: `"complete"`
+   - `phase_status`: `"completed"`
    - `updated_at`: current timestamp
+   - Update the last entry in `phase_history`: set `completed_at` to current timestamp, `work_units_completed` to relevant count from metrics
 4. Print progress line (see Section 8)
 5. Execute transition logic (see Section 5)
 
@@ -500,7 +502,7 @@ After Phase 4 postconditions pass, compute conceptual saturation `Δ(n, k)`:
 After Phase 5 postconditions pass:
 1. Update `state.json`:
    - `current_phase`: 5
-   - `phase_status`: `"complete"`
+   - `phase_status`: `"completed"`
    - `updated_at`: current timestamp
 2. Print the full completion summary (see Section 8).
 
@@ -683,8 +685,8 @@ If `state.json` contains a `phase_status` that is not one of `{pending, in_progr
 If this skill is invoked and `state.json` already exists in a workspace matching the project slug:
 - Read `state.json`
 - If `protocol_approved` is `false`: offer to resume Phase 0
-- If `protocol_approved` is `true` and `phase_status` is not `"complete"`: offer to resume from `current_phase`
-- If `phase_status` is `"complete"` (Phase 5 done): report that the review is already complete and show the workspace path
+- If `protocol_approved` is `true` and `phase_status` is not `"completed"`: offer to resume from `current_phase`
+- If `phase_status` is `"completed"` (Phase 5 done): report that the review is already complete and show the workspace path
 
 Prompt the user:
 > "Found existing workspace at {WORKSPACE} (Phase {current_phase}, status: {phase_status}). Resume? [y/n]"
