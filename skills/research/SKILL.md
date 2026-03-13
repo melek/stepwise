@@ -2,7 +2,7 @@
 name: research
 description: Start a new systematic literature review. Refines research question into protocol, then executes autonomous multi-phase review.
 argument-hint: "[research question in quotes]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_citation, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers, mcp__zotero__zotero_search, mcp__zotero__zotero_get_item, mcp__zotero__zotero_list_collections, mcp__zotero__zotero_get_collection_items
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_citation, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers, mcp__unpaywall__unpaywall_search_titles, mcp__unpaywall__unpaywall_get_by_doi, mcp__unpaywall__unpaywall_get_fulltext_links, mcp__unpaywall__unpaywall_fetch_pdf_text, mcp__zotero__zotero_search, mcp__zotero__zotero_get_item, mcp__zotero__zotero_list_collections, mcp__zotero__zotero_get_collection_items
 ---
 
 # Scholar: Research Skill Orchestrator
@@ -671,6 +671,7 @@ At the start of Phase 1, before dispatching the search agent, verify that both S
 - If **one** server is unavailable: warn the user:
   > "Warning: {server} MCP is unavailable. The review will proceed using {other_server} only. Coverage may be reduced."
   Continue with the available server. Record this in `phase-log.jsonl` as a `degraded_operation` event.
+- Unpaywall MCP (optional): attempt `mcp__unpaywall__unpaywall_get_by_doi` with a known DOI (e.g., `10.1145/3359591.3359735`). If unavailable, log and continue (papers with DOIs but no arXiv ID will remain abstract-only).
 
 ### Workspace Corruption
 
