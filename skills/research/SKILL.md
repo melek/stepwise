@@ -544,7 +544,7 @@ The complete check specifications are in `{PLUGIN_DIR}/runbooks/postconditions.m
 - **Phase 2:** All candidates have a final screening decision; every paper in included.jsonl has a corresponding include decision in screening-log.jsonl; no orphan inclusions.
 - **Phase 3:** Termination condition met (saturation or max depth); all seed papers have forward and backward snowball entries; truncations logged; new inclusions in candidates.jsonl and included.jsonl.
 - **Phase 4:** All included papers have extraction records; concepts.jsonl non-empty; concept-matrix.md exists; all referenced concept IDs are defined; saturation check event logged.
-- **Phase 5:** All included papers cited in review.md; all sub-questions addressed in question-answers.jsonl; bibliography count matches citation count in review.md; all required section headers present.
+- **Phase 5:** All included papers listed in Appendix A; all sub-questions addressed in question-answers.jsonl; bibliography count matches body citation count in review.md; all required section headers present; Appendix A row count matches included.jsonl.
 
 ---
 

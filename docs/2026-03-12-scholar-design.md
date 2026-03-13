@@ -571,7 +571,7 @@ Phase 4: ∀ paper ∈ included.jsonl: ∃ extraction ∈ extractions.jsonl
          concept-matrix.md exists and is non-empty
          conceptual_saturation computed → drives transition to Phase 5 or back to Phase 3
 
-Phase 5: ∀ paper ∈ included.jsonl: paper.id appears in review.md
+Phase 5: ∀ paper ∈ included.jsonl: paper.id appears in Appendix A of review.md
          ∀ question ∈ protocol.questions: question text appears in review.md §5 (Conclusion)
          synthesis agent produces question-answers.jsonl mapping each sub-question
            to the section that addresses it (structural check, not semantic)
@@ -645,7 +645,7 @@ Table: ID, Title, Authors, Year, Venue, Relevance
 
 These are verifiable properties — testable assertions about the system's behavior.
 
-**P1 — Completeness:** Every paper in `included.jsonl` is cited in `review.md`. Every research question is addressed.
+**P1 — Completeness:** Every paper in `included.jsonl` appears in Appendix A of `review.md`. Body citations should prefer the earliest or most foundational paper in a chain rather than bulk-listing all related work. Every research question is addressed.
 
 **P2 — Traceability:** For every claim in `review.md`, there exists a chain: claim → cited paper → extraction record → screening decision → search query or snowball traversal. The chain is reconstructable from the JSONL logs alone.
 

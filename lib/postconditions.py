@@ -360,16 +360,16 @@ def check_phase4_all(
 # Phase 5 — Synthesis
 # ============================================================
 
-def check_all_papers_cited(
-    included: list[dict], review_citation_keys: set[str]
+def check_all_papers_in_appendix(
+    included: list[dict], appendix_keys: set[str]
 ) -> tuple[bool, list[str]]:
-    """Every included paper's id or bibtex_key appears in review citations."""
+    """Every included paper's id or bibtex_key appears in Appendix A."""
     failures = []
     for p in included:
         pid = p["id"]
         bkey = p.get("bibtex_key", "")
-        if pid not in review_citation_keys and bkey not in review_citation_keys:
-            failures.append(f"Paper {pid} not cited in review.md")
+        if pid not in appendix_keys and bkey not in appendix_keys:
+            failures.append(f"Paper {pid} missing from Appendix A")
     return _result(failures)
 
 
@@ -445,10 +445,13 @@ def check_phase5_all(
     bib_entry_count: int,
     appendix_a_row_count: int,
     included_count: int,
+    appendix_keys: set[str] | None = None,
 ) -> tuple[bool, list[str]]:
     all_failures = []
+    if appendix_keys is None:
+        appendix_keys = set()
     for check_fn, args in [
-        (check_all_papers_cited, (included, review_citation_keys)),
+        (check_all_papers_in_appendix, (included, appendix_keys)),
         (check_all_questions_addressed, (protocol_questions, question_answers)),
         (check_question_answers_complete, (protocol_questions, question_answers)),
         (check_bibliography_consistent, (bib_entry_count, review_citation_keys)),

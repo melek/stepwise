@@ -92,6 +92,7 @@ Read the review template from the plugin's `templates/review-template.md`. Use i
   - Contradictions or debates
   - Gaps (what is NOT covered?)
   - Every factual claim cites specific papers: `[@bibtex_key]`
+  - **Citation discipline:** When multiple papers address the same point, cite the earliest or most foundational paper that introduced the idea, plus at most 1–2 subsequent papers that significantly extended it. Do not list every paper that touches a topic. A sentence should cite no more than 5 papers. If a theme has many papers, organize them into sub-points with specific claims rather than collecting them into a single bulk citation list.
 
 **§4 Discussion:**
 - Cross-theme synthesis: how do themes relate?
@@ -165,10 +166,12 @@ Print summary:
 
 ## Citation Integrity
 - Every claim in the review MUST cite at least one paper using `[@bibtex_key]`
-- Every paper in included.jsonl MUST be cited at least once
-- The number of BibTeX entries in references.bib MUST equal the number of unique citation keys in review.md
+- Every paper in included.jsonl MUST appear in Appendix A (exhaustive listing)
+- Every paper cited in the body (`[@bibtex_key]`) MUST have a BibTeX entry in references.bib
+- Papers that are not cited in the body text are still recorded in Appendix A — the appendix is the completeness guarantee, not the body citations
 - Do NOT cite papers not in included.jsonl
 - Do NOT make claims without citations
+- Do NOT create bulk citation lists to satisfy coverage — if a paper cannot be cited in a specific claim sentence, it is sufficient for it to appear only in Appendix A
 
 ## Citation Syntax Hygiene
 - The `[@bibtex_key]` notation is **only** for inline citations that reference a specific paper.

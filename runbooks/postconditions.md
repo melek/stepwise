@@ -113,7 +113,7 @@ Record the saturation metric and transition decision in `state.json` and `phase-
 
 **Checks:**
 
-1. **All papers cited:** For every paper in `included.jsonl`, `paper.id` or the paper's BibTeX key appears in `review.md`.
+1. **All papers in Appendix A:** For every paper in `included.jsonl`, `paper.id` or the paper's BibTeX key appears in Appendix A of `review.md`. (Body citation coverage is not required — Appendix A is the completeness guarantee.)
 2. **All questions addressed:** For every sub-question in `protocol.md`, there exists an entry in `question-answers.jsonl` with `disposition` in `{answered, partially_answered, identified_as_gap}`.
 3. **Question-answers complete:** `question-answers.jsonl` has an entry for every sub-question in the protocol.
 4. **Bibliography consistent:** The number of entries in `references.bib` equals the number of unique `[@...]` citation keys in `review.md`. When counting citation keys in `review.md`, only count keys inside actual citation brackets `[@...]` — exclude any occurrences inside backtick-escaped code spans or code blocks.

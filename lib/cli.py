@@ -133,6 +133,30 @@ def count_appendix_a_rows(workspace: Path) -> int:
     return max(0, len(table_lines) - 1)
 
 
+def parse_appendix_keys(workspace: Path) -> set[str]:
+    """Extract BibTeX keys from Appendix A table rows."""
+    review_path = workspace / "review.md"
+    if not review_path.exists():
+        return set()
+    text = review_path.read_text()
+    match = re.search(r"(?:^|\n)#{1,3}\s+(?:Appendix A[:\s].*|Appendix A)\s*\n", text)
+    if not match:
+        return set()
+    section_start = match.end()
+    next_section = re.search(r"\n#{1,3}\s+", text[section_start:])
+    section_end = section_start + next_section.start() if next_section else len(text)
+    section_text = text[section_start:section_end]
+    keys = set()
+    for line in section_text.splitlines():
+        line = line.strip()
+        if line.startswith("|") and not re.match(r"^\|[\s\-:|]+\|$", line):
+            # Extract first cell content as key
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if cells and cells[0] not in ("Key", "ID"):
+                keys.add(cells[0])
+    return keys
+
+
 def parse_protocol_questions(workspace: Path) -> list[str]:
     """Extract research sub-questions from protocol.md."""
     protocol_path = workspace / "protocol.md"
@@ -236,6 +260,7 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
         section_headers = parse_review_headers(workspace)
         protocol_questions = parse_protocol_questions(workspace)
         appendix_rows = count_appendix_a_rows(workspace)
+        appendix_keys = parse_appendix_keys(workspace)
         bib_path = workspace / "references.bib"
         bib_count = 0
         if bib_path.exists():
@@ -249,6 +274,7 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
             bib_count,
             appendix_rows,
             len(data["included"]),
+            appendix_keys,
         )
     else:
         print(json.dumps({"error": f"Invalid phase: {phase}"}))
