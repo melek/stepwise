@@ -467,13 +467,18 @@ Direct transition. Update `state.json` to `current_phase: 4, phase_status: "pend
 
 ### Phase 4 → Phase 3 (feedback loop) or Phase 5
 
-After Phase 4 postconditions pass, compute conceptual saturation `Δ(n, k)`:
+After Phase 4 postconditions pass, compute conceptual saturation `Δ(n, k)` using the CLI:
 
-1. Read `{WORKSPACE}/data/concepts.jsonl`. Count total concepts → `total_concepts`.
-2. Read `{WORKSPACE}/data/extractions.jsonl`. Get all extraction records sorted by timestamp. Identify the last `k` papers extracted (use the `k` value from `protocol.md`).
-3. From `concepts.jsonl`, count concepts whose `first_seen_in` field is one of those last `k` paper IDs → `new_concepts_in_last_k`.
-4. Compute `Δ(n, k) = new_concepts_in_last_k / total_concepts`. If `total_concepts = 0`, set `Δ(n, k) = 0`.
-5. Read `feedback_iterations` from `state.json`. Read `max_feedback_iterations` from `protocol.md`.
+```bash
+python3 {PLUGIN_DIR}/lib/cli.py saturation --type conceptual --k {k} --workspace {WORKSPACE}
+```
+
+Where `k` is the `conceptual_saturation_k` value from `protocol.md`. The CLI returns:
+```json
+{"type": "conceptual", "k": 5, "saturation": "3/28", "saturation_float": 0.107}
+```
+
+Read `feedback_iterations` from `state.json`. Read `max_feedback_iterations` and `θ_c` from `protocol.md`.
 
 **Decision:**
 
@@ -514,16 +519,22 @@ After each phase agent returns, run the postcondition checks defined in `{PLUGIN
 
 ### How to Run Checks
 
-For each check defined in `postconditions.md` for the current phase:
+Run the verified postcondition checker via CLI:
 
-1. Read the specified file(s) using the Read or Bash tool
-2. Evaluate the condition as stated
-3. If the condition holds: mark the check as passed
-4. If the condition does not hold: record which check failed, what the expected condition was, and what was actually found
+```bash
+python3 {PLUGIN_DIR}/lib/cli.py postcondition --phase {N} --workspace {WORKSPACE}
+```
 
-If **all** checks pass: proceed to Step E of the execution loop (metrics update and transition).
+The CLI reads all workspace files and returns JSON:
+```json
+{"satisfied": true, "failures": []}
+```
 
-If **any** check fails: proceed to Step F (retry logic).
+If `satisfied` is `true`: proceed to Step E of the execution loop (metrics update and transition).
+
+If `satisfied` is `false`: the `failures` array lists what failed. Proceed to Step F (retry logic). Include the failure descriptions in the retry dispatch prompt.
+
+The complete check specifications are also documented in `{PLUGIN_DIR}/runbooks/postconditions.md` for reference.
 
 ### Phase-specific Check Summary
 
@@ -539,33 +550,32 @@ The complete check specifications are in `{PLUGIN_DIR}/runbooks/postconditions.m
 
 ## Section 7: Metrics Update
 
-After each phase passes postconditions, update `metrics` in `{WORKSPACE}/state.json` by reading the workspace files. All counts are exact — count file lines or records, do not estimate.
+After **every** phase passes postconditions (Phases 1 through 5), run the full recount procedure below. Do not skip any metric — recount all of them every time. This ensures metrics stay consistent even when later phases modify shared files (e.g., Phase 3 appends to `included.jsonl` and `candidates.jsonl`).
 
 ### Metric Computation
 
-**`total_candidates`:** Count the number of lines in `{WORKSPACE}/data/candidates.jsonl`. Each line is one candidate record. Use:
+Run the verified metrics recount via CLI:
+
 ```bash
-wc -l < {WORKSPACE}/data/candidates.jsonl
+python3 {PLUGIN_DIR}/lib/cli.py metrics --workspace {WORKSPACE}
 ```
-(Handle the case where the file does not exist: count = 0.)
 
-**`total_included`:** Count lines in `{WORKSPACE}/data/included.jsonl`.
+The CLI reads all workspace data files and returns JSON:
+```json
+{
+  "total_candidates": 365,
+  "total_included": 42,
+  "total_excluded": 310,
+  "total_flagged": 13,
+  "snowball_depth_reached": 2,
+  "concepts_count": 28,
+  "extraction_complete_count": 42
+}
+```
 
-**`total_excluded`:** Count entries in `{WORKSPACE}/logs/screening-log.jsonl` where `decision == "exclude"`. Read the file and filter.
-
-**`total_flagged`:** Count entries in `{WORKSPACE}/logs/screening-log.jsonl` where `decision == "flag_for_full_text"`.
-
-**`snowball_depth_reached`:** Read `{WORKSPACE}/logs/snowball-log.jsonl`. Find the maximum value of `depth_level` across all entries. If the file does not exist, set to 0.
-
-**`discovery_saturation`:** Read the most recent `saturation_check` event with `type == "discovery"` from `{WORKSPACE}/logs/phase-log.jsonl`. Extract `saturation_metric`. If no such event, set to `null`.
-
-**`conceptual_saturation`:** Read the most recent `saturation_check` event with `type == "conceptual"` from `{WORKSPACE}/logs/phase-log.jsonl`. Extract `saturation_metric`. If no such event, set to `null`.
-
-**`concepts_count`:** Count lines in `{WORKSPACE}/data/concepts.jsonl`. If the file does not exist, set to 0.
-
-**`extraction_complete_count`:** Count the number of unique `paper_id` values in `{WORKSPACE}/data/extractions.jsonl`. If the file does not exist, set to 0.
-
-After computing all metrics, write the updated `state.json`. Also update `updated_at` to the current ISO-8601 timestamp.
+Take the returned metrics object and write it into the `metrics` field of `{WORKSPACE}/state.json`. Also update:
+- `discovery_saturation` and `conceptual_saturation` — these are read from phase-log.jsonl saturation_check events. After running the metrics CLI, read the most recent `saturation_check` events from `{WORKSPACE}/logs/phase-log.jsonl` and update those two fields in state.json.
+- `updated_at` — set to current ISO-8601 timestamp.
 
 ---
 
@@ -585,6 +595,12 @@ After each phase transition prints one progress line using this format:
   > "✓ Phase 3 (Snowballing) complete — {papers_added} papers added via snowballing, depth {snowball_depth_reached}"
 
   Where `papers_added = total_included_after - total_included_before`. Store `total_included_before` at Phase 3 start.
+
+  After printing the Phase 3 completion line, compute and print a search-coverage diagnostic:
+  - Count papers in `included.jsonl` where `source == "search"` → `search_count`
+  - `total_included` from metrics
+  - `search_pct = (search_count / total_included) * 100`
+  - Print: `"  Search contributed {search_count}/{total_included} included ({search_pct:.0f}%). If <15%, search terms may be too narrow."`
 
 - **Phase 4 complete:**
   > "✓ Phase 4 (Extraction) complete — {extraction_complete_count} papers extracted, {concepts_count} concepts identified"

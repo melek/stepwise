@@ -79,10 +79,11 @@ The orchestrator executes these checks by reading the relevant files and verifyi
 **Checks:**
 
 1. **All papers extracted:** For every paper in `included.jsonl`, there exists at least one record in `extractions.jsonl` where `entry.paper_id` matches `paper.id`.
-2. **Concepts non-empty:** `data/concepts.jsonl` contains at least one record.
-3. **Concept matrix exists:** `concept-matrix.md` exists and is non-empty.
-4. **All concepts defined:** Every `concept_id` referenced in any extraction record exists in `concepts.jsonl` with a non-empty `definition`.
-5. **Conceptual saturation computed:** There exists a `saturation_check` event in `phase-log.jsonl` for the current phase with a non-null `saturation_metric`.
+2. **Extraction schema valid:** Every extraction record has a `source` field (`"full_text"` or `"abstract"`). Every entry in the `fields` array has all four required keys: `field_name` (string), `value` (string), `source_location` (string), `confidence` (one of `"high"`, `"medium"`, `"low"`). No key may be null or missing.
+3. **Concepts non-empty:** `data/concepts.jsonl` contains at least one record.
+4. **Concept matrix exists:** `concept-matrix.md` exists and is non-empty.
+5. **All concepts defined:** Every `concept_id` referenced in any extraction record exists in `concepts.jsonl` with a non-empty `definition`.
+6. **Conceptual saturation computed:** There exists a `saturation_check` event in `phase-log.jsonl` for the current phase with a non-null `saturation_metric`.
 
 **Transition logic (computed by orchestrator after checks pass):**
 
@@ -115,8 +116,9 @@ Record the saturation metric and transition decision in `state.json` and `phase-
 1. **All papers cited:** For every paper in `included.jsonl`, `paper.id` or the paper's BibTeX key appears in `review.md`.
 2. **All questions addressed:** For every sub-question in `protocol.md`, there exists an entry in `question-answers.jsonl` with `disposition` in `{answered, partially_answered, identified_as_gap}`.
 3. **Question-answers complete:** `question-answers.jsonl` has an entry for every sub-question in the protocol.
-4. **Bibliography consistent:** The number of entries in `references.bib` equals the number of unique `[@...]` citation keys in `review.md`.
+4. **Bibliography consistent:** The number of entries in `references.bib` equals the number of unique `[@...]` citation keys in `review.md`. When counting citation keys in `review.md`, only count keys inside actual citation brackets `[@...]` — exclude any occurrences inside backtick-escaped code spans or code blocks.
 5. **Review structure:** `review.md` contains all required section headers: Abstract, Introduction, Methodology, Results, Discussion, Conclusion, References, Appendix A, Appendix B.
+6. **Appendix A row count:** The number of data rows in Appendix A's included-papers table (excluding the header row and separator row) equals the number of records in `data/included.jsonl`.
 
 **On failure:** Retry phase once. If still failing, record failure and terminate.
 

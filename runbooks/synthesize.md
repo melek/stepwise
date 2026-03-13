@@ -170,6 +170,13 @@ Print summary:
 - Do NOT cite papers not in included.jsonl
 - Do NOT make claims without citations
 
+## Citation Syntax Hygiene
+- The `[@bibtex_key]` notation is **only** for inline citations that reference a specific paper.
+- Do NOT use `[@...]` syntax in explanatory prose, methodology descriptions, or when describing citation conventions. Use backtick escaping (e.g., `` `[@key]` ``) or describe the notation without bracket syntax when explaining it.
+- Incorrect: "Papers are cited using [@key] notation in this review."
+- Correct: "Papers are cited using `[@key]` notation in this review."
+- This prevents phantom citation keys from appearing in the bibliography consistency postcondition check.
+
 ## Constraints
 - Do NOT modify state.json
 - Do NOT modify protocol.md

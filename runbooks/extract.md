@@ -85,6 +85,7 @@ Append to `{workspace}/data/extractions.jsonl`:
 ```json
 {
   "paper_id": "{id}",
+  "source": "full_text | abstract",
   "timestamp": "{ISO-8601}",
   "schema_version": "1.0",
   "fields": [
