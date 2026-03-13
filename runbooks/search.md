@@ -81,9 +81,17 @@ Before writing each candidate:
 
 ### Step 5: Download Papers (arXiv)
 For each candidate with an arXiv ID:
-1. Use `mcp__arxiv__download_paper` with the arXiv ID
-2. Use `mcp__arxiv__read_paper` to get the text content
-3. Write the text to `{workspace}/papers/{canonical_id}.txt` (replace `/` and `:` in ID with `_`)
+1. Call `mcp__arxiv__download_paper` with the arXiv ID
+2. Poll `mcp__arxiv__download_paper` with `check_status: true` until status is `"success"` or `"error"` (conversion takes a few seconds)
+3. On success: call `mcp__arxiv__read_paper` to get the text content, then write it to `{workspace}/papers/{canonical_id}.txt` (replace `/` and `:` in the ID with `_`). Update the candidate's `pdf_path` field.
+4. On error: log the failure and continue to the next paper
+
+Log every download attempt to `{workspace}/logs/download-log.jsonl`:
+```json
+{"paper_id": "{id}", "arxiv_id": "{arxiv_id}", "timestamp": "{ISO-8601}", "status": "success|error", "error_message": null}
+```
+
+This step may involve many papers. Process all of them — do not skip downloads to save time. If rate-limited, apply the backoff procedure in the Rate Limit Handling section below.
 
 ### Step 6: Enrich Metadata
 For candidates found only on arXiv (no S2 ID):
