@@ -598,6 +598,16 @@ Phase 5: ∀ paper ∈ included.jsonl: paper.id appears in Appendix A of review.
 
 **Reactive backoff (on HTTP 429):** If a 429 is received despite proactive pacing, apply exponential backoff (initial 2s, max 60s, max 5 retries). Rate limit events are logged to `phase-log.jsonl` with event type `rate_limit`. If retries are exhausted, the agent records the incomplete work and terminates; the orchestrator detects incomplete work via postcondition failure and retries the phase.
 
+### 5.5 Paper Cache
+
+Paper full texts are cached at `~/research/.paper-cache/{safe_id}.txt` across reviews. The cache is a **write-through accelerator** — workspaces always maintain their own copy in `{workspace}/papers/` (preserving A2: workspace completeness). The cache has no authority over workspace state.
+
+- **On download:** write to both workspace and cache
+- **Before download:** check cache first; on hit, copy to workspace and skip the API call
+- **Cache miss:** no consequence beyond a re-download
+- **No invalidation needed:** paper full texts are immutable (arXiv versions are fixed, DOI content is published)
+- **Garbage collection:** optional — `~/research/.paper-cache/` can be deleted at any time without affecting existing workspaces
+
 ---
 
 ## 6. Output Specification: The Literature Review

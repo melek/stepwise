@@ -81,10 +81,12 @@ Before writing each candidate:
 
 ### Step 5: Download Papers (arXiv)
 For each candidate with an arXiv ID:
-1. Call `mcp__arxiv__download_paper` with the arXiv ID
-2. Poll `mcp__arxiv__download_paper` with `check_status: true` until status is `"success"` or `"error"` (conversion takes a few seconds)
-3. On success: call `mcp__arxiv__read_paper` to get the text content, then write it to `{workspace}/papers/{canonical_id}.txt` (replace `/` and `:` in the ID with `_`). Update the candidate's `pdf_path` field.
-4. On error: log the failure and continue to the next paper
+1. Compute `safe_id` = canonical ID with `/` and `:` replaced by `_`
+2. **Cache check:** If `~/research/.paper-cache/{safe_id}.txt` exists, copy it to `{workspace}/papers/{safe_id}.txt`, update `pdf_path`, log with `"status": "cache_hit"`, and skip to the next paper
+3. Call `mcp__arxiv__download_paper` with the arXiv ID
+4. Poll `mcp__arxiv__download_paper` with `check_status: true` until status is `"success"` or `"error"` (conversion takes a few seconds)
+5. On success: call `mcp__arxiv__read_paper` to get the text content, then write it to `{workspace}/papers/{safe_id}.txt`. Also copy to `~/research/.paper-cache/{safe_id}.txt`. Update the candidate's `pdf_path` field.
+6. On error: log the failure and continue to the next paper
 
 Log every download attempt to `{workspace}/logs/download-log.jsonl`:
 ```json
@@ -104,12 +106,14 @@ For candidates found only on Semantic Scholar (no arXiv ID):
 
 ### Step 6b: Download Papers (Unpaywall)
 For each candidate that has a DOI but NO `pdf_path` (i.e., arXiv download was not available or failed):
-1. Call `mcp__unpaywall__unpaywall_get_fulltext_links` with the candidate's DOI
-2. If an open-access link is returned:
+1. Compute `safe_id` = canonical ID with `/` and `:` replaced by `_`
+2. **Cache check:** If `~/research/.paper-cache/{safe_id}.txt` exists, copy it to `{workspace}/papers/{safe_id}.txt`, update `pdf_path`, log with `"status": "cache_hit"`, and skip to the next paper
+3. Call `mcp__unpaywall__unpaywall_get_fulltext_links` with the candidate's DOI
+4. If an open-access link is returned:
    a. Call `mcp__unpaywall__unpaywall_fetch_pdf_text` with the DOI
-   b. Write the extracted text to `{workspace}/papers/{canonical_id}.txt` (replace `/` and `:` in the ID with `_`)
+   b. Write the extracted text to `{workspace}/papers/{safe_id}.txt`. Also copy to `~/research/.paper-cache/{safe_id}.txt`.
    c. Update the candidate's `pdf_path` field
-3. If no open-access link: skip (paper remains abstract-only)
+5. If no open-access link: skip (paper remains abstract-only)
 
 Log every Unpaywall attempt to `{workspace}/logs/download-log.jsonl`:
 ```json
