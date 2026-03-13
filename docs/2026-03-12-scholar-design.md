@@ -58,7 +58,7 @@ Conceptual saturation: Let `concepts(n)` be the cumulative concept set after ext
 
 ### A6 — Sovereignty
 
-All data — papers, logs, notes, the review document — resides in the user's filesystem. Papers are downloaded locally when possible (arXiv). Zotero is used as a reference manager, not as primary storage; the workspace is authoritative. Cloud APIs (Semantic Scholar, arXiv) are used for discovery only. No user data is sent to external services except search queries.
+All data — papers, logs, notes, the review document — resides in the user's filesystem. Papers are downloaded locally when possible (arXiv). Zotero is used as a reference manager, not as primary storage; the workspace is authoritative. Cloud APIs (Semantic Scholar, arXiv) are used for discovery only. Unpaywall is queried with DOIs to locate open-access full text; only the DOI is transmitted. No user data is sent to external services except search queries.
 
 ### A7 — Reproducibility
 
@@ -125,8 +125,9 @@ Phase 5: Synthesis
    b. Record: query, database, timestamp, result count, paper IDs returned
    c. Deduplicate (see §3.4 Deduplication)
 2. Download available PDFs via arXiv MCP, then write content to workspace `papers/` directory (arXiv MCP stores internally; the search agent must read via `read_paper` and write to `papers/{id}.pdf` to satisfy A2)
-3. Fetch metadata for all candidates (title, abstract, authors, year, venue, citation count)
-4. Write candidate records to `candidates.jsonl`
+3. For candidates with a DOI but no arXiv full text: query Unpaywall for open-access full text. If available, download and write to `papers/` directory. This extends full-text coverage beyond arXiv to any open-access paper with a DOI.
+4. Fetch metadata for all candidates (title, abstract, authors, year, venue, citation count)
+5. Write candidate records to `candidates.jsonl`
 
 **Outputs:**
 - `search-log.jsonl` — every query executed, parameters, result counts
@@ -212,7 +213,12 @@ For each candidate paper:
 
 **Process:**
 For each included paper (skip if extraction record already exists in `extractions.jsonl` — relevant during Phase 4→3→4 feedback loops):
-1. Read full text (PDF if available, else abstract + metadata)
+1. Read paper content. If full text available in `papers/`:
+   a. Parse text into sections using the verified section parser
+   b. For each extraction field, retrieve focused context from the relevant sections
+   c. Extract from focused context (not the full document)
+   If no full text available: use abstract + metadata from included.jsonl (existing behavior).
+   Record which source was used: "full_text" or "abstract".
 2. Extract each field defined in the concept extraction schema
 3. Record: paper ID, field name, extracted value, source location (page/section), confidence
 4. Identify concepts (themes, methods, findings) — add to concept vocabulary
@@ -657,7 +663,7 @@ These are verifiable properties — testable assertions about the system's behav
 
 **P6 — Boundedness:** Each phase invocation performs at most `b(φ)` work units, where `b` is defined in the protocol. The system terminates.
 
-**P7 — Sovereignty:** No file in the workspace is stored on or transmitted to an external service, except: (a) search queries sent to Semantic Scholar/arXiv APIs, (b) paper metadata sent to Zotero for collection management.
+**P7 — Sovereignty:** No file in the workspace is stored on or transmitted to an external service, except: (a) search queries sent to Semantic Scholar/arXiv APIs, (b) DOIs sent to Unpaywall for open-access lookup, (c) paper metadata sent to Zotero for collection management.
 
 ---
 
@@ -679,6 +685,7 @@ Explicit scope exclusions to prevent creep:
 |-----------|---------|----------|----------|
 | Semantic Scholar MCP | Paper search, metadata, citation graph | Yes (for discovery) | arXiv-only search (degraded coverage) |
 | arXiv MCP | Paper search, PDF download | Yes (for full text) | Metadata-only review (degraded extraction) |
+| Unpaywall MCP | Full-text retrieval for DOI papers | No | Abstract-only extraction for non-arXiv papers |
 | Zotero MCP | Reference management, collection export | No | BibTeX file only, no Zotero sync |
 | Claude Code Agent tool | Sub-agent dispatch | Yes | Single-agent sequential execution |
 | Agent teams (experimental) | Parallel agent dispatch | No | Sequential sub-agents |
