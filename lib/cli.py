@@ -27,6 +27,7 @@ from pathlib import Path
 from . import metrics as m
 from . import postconditions as pc
 from . import saturation as sat
+from . import section_parser as sp
 from . import state as st
 
 
@@ -371,6 +372,29 @@ def cmd_saturation(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_parse_sections(args: argparse.Namespace) -> None:
+    file_path = Path(args.file).expanduser()
+    text = file_path.read_text()
+
+    if args.field:
+        result = sp.get_extraction_context(text, args.field, max_chars=args.max_chars)
+        json.dump(result, sys.stdout, indent=2)
+    else:
+        sections = sp.parse_sections(text)
+        output = [
+            {
+                "heading": s["heading"],
+                "level": s["level"],
+                "start": s["start"],
+                "end": s["end"],
+                "char_count": s["end"] - s["start"],
+            }
+            for s in sections
+        ]
+        json.dump(output, sys.stdout, indent=2)
+    print()
+
+
 # --- Argument parser ---
 
 def main() -> None:
@@ -402,12 +426,19 @@ def main() -> None:
     p_sat.add_argument("--depth", type=int)
     p_sat.add_argument("--k", type=int)
 
+    # parse-sections
+    p_sections = sub.add_parser("parse-sections", help="Parse markdown text into sections")
+    p_sections.add_argument("--file", required=True, help="Path to text file")
+    p_sections.add_argument("--field", help="Optional: get extraction context for a specific field")
+    p_sections.add_argument("--max-chars", type=int, default=8000, help="Max context chars (default 8000)")
+
     args = parser.parse_args()
     handlers = {
         "metrics": cmd_metrics,
         "postcondition": cmd_postcondition,
         "transition": cmd_transition,
         "saturation": cmd_saturation,
+        "parse-sections": cmd_parse_sections,
     }
     handlers[args.command](args)
 
