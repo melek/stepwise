@@ -88,7 +88,7 @@ For each candidate with an arXiv ID:
 
 Log every download attempt to `{workspace}/logs/download-log.jsonl`:
 ```json
-{"paper_id": "{id}", "arxiv_id": "{arxiv_id}", "timestamp": "{ISO-8601}", "status": "success|error", "error_message": null}
+{"paper_id": "{id}", "arxiv_id": "{arxiv_id}", "source": "arxiv", "timestamp": "{ISO-8601}", "status": "success|error", "error_message": null}
 ```
 
 This step may involve many papers. Process all of them — do not skip downloads to save time. If rate-limited, apply the backoff procedure in the Rate Limit Handling section below.
@@ -102,6 +102,27 @@ For candidates found only on Semantic Scholar (no arXiv ID):
 - Check if `externalIds` contains an arXiv ID
 - If yes: download the paper (Step 5)
 
+### Step 6b: Download Papers (Unpaywall)
+For each candidate that has a DOI but NO `pdf_path` (i.e., arXiv download was not available or failed):
+1. Call `mcp__unpaywall__unpaywall_get_fulltext_links` with the candidate's DOI
+2. If an open-access link is returned:
+   a. Call `mcp__unpaywall__unpaywall_fetch_pdf_text` with the DOI
+   b. Write the extracted text to `{workspace}/papers/{canonical_id}.txt` (replace `/` and `:` in the ID with `_`)
+   c. Update the candidate's `pdf_path` field
+3. If no open-access link: skip (paper remains abstract-only)
+
+Log every Unpaywall attempt to `{workspace}/logs/download-log.jsonl`:
+```json
+{"paper_id": "{id}", "doi": "{doi}", "source": "unpaywall", "timestamp": "{ISO-8601}", "status": "success|no_oa|error", "error_message": null}
+```
+
+Pace Unpaywall calls at 1 per second (Unpaywall's rate limit is 100K/day but requests politeness). If rate-limited, apply the same backoff procedure as arXiv.
+
+**Note:** This step only runs if the Unpaywall MCP is available. If `mcp__unpaywall__unpaywall_get_fulltext_links` is not in the tool list, skip this step entirely and log:
+```json
+{"timestamp": "{ISO-8601}", "event": "unpaywall_unavailable", "phase": 1, "details": {"reason": "MCP not configured"}}
+```
+
 ### Step 7: Write Final Candidates
 Append all deduplicated candidates to `{workspace}/data/candidates.jsonl` (one JSON object per line). If the file already exists (e.g., from a prior partial run), append only candidates not already present (check by canonical ID).
 
@@ -110,7 +131,9 @@ Print summary:
 - Queries executed: {N}
 - Total raw results: {N}
 - Unique candidates after dedup: {N}
-- Papers downloaded: {N}
+- Papers downloaded (arXiv): {N}
+- Papers downloaded (Unpaywall): {N}
+- Papers with full text: {N} / {total candidates}
 
 ## Rate Limit Handling
 On HTTP 429 or rate limit errors:
