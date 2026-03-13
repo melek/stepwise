@@ -136,7 +136,20 @@ Print summary:
 - Papers with full text: {N} / {total candidates}
 
 ## Rate Limit Handling
-On HTTP 429 or rate limit errors:
+
+### Proactive Pacing (required)
+Pace all API calls to respect documented rate limits. Do NOT fire requests as fast as possible and rely on 429 backoff.
+
+| API | Minimum interval between requests |
+|-----|----------------------------------|
+| Semantic Scholar | 1 second |
+| arXiv | 3 seconds |
+| Unpaywall | 1 second |
+
+Use `sleep` or equivalent between consecutive calls to the same API.
+
+### Reactive Backoff (on HTTP 429)
+If a 429 is received despite proactive pacing:
 - Wait with exponential backoff: 2s, 4s, 8s, 16s, 32s (max 5 retries)
 - Log each rate limit event to `{workspace}/logs/phase-log.jsonl`:
   ```json

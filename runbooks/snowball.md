@@ -102,6 +102,16 @@ Print summary:
 - Final discovery saturation: {metric}
 
 ## Rate Limit Handling
+
+### Proactive Pacing (required)
+Pace all API calls to respect documented rate limits:
+
+| API | Minimum interval between requests |
+|-----|----------------------------------|
+| Semantic Scholar | 1 second |
+| arXiv | 3 seconds |
+
+### Reactive Backoff (on HTTP 429)
 Same as search agent: exponential backoff (2s, 4s, 8s, 16s, 32s), log to phase-log.jsonl, skip on exhaustion.
 
 ## Constraints

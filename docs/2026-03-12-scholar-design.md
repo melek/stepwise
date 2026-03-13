@@ -588,7 +588,15 @@ Phase 5: ∀ paper ∈ included.jsonl: paper.id appears in Appendix A of review.
 
 ### 5.4 Rate Limit Handling
 
-Agents must handle HTTP 429 (rate limit) responses from Semantic Scholar and arXiv APIs with exponential backoff (initial 2s, max 60s, max 5 retries). Rate limit events are logged to `phase-log.jsonl` with event type `rate_limit`. If retries are exhausted, the agent records the incomplete work and terminates; the orchestrator detects incomplete work via postcondition failure and retries the phase.
+**Proactive pacing (required):** Agents must respect each API's documented rate limits by pacing requests, not just reacting to 429 errors:
+
+| API | Minimum interval between requests | Source |
+|-----|----------------------------------|--------|
+| Semantic Scholar | 1 second (1 RPS) | S2 API docs — authenticated rate |
+| arXiv | 3 seconds | arXiv API Terms of Use |
+| Unpaywall | 1 second | Politeness; 100K/day hard cap |
+
+**Reactive backoff (on HTTP 429):** If a 429 is received despite proactive pacing, apply exponential backoff (initial 2s, max 60s, max 5 retries). Rate limit events are logged to `phase-log.jsonl` with event type `rate_limit`. If retries are exhausted, the agent records the incomplete work and terminates; the orchestrator detects incomplete work via postcondition failure and retries the phase.
 
 ---
 
