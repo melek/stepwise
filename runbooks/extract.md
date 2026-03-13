@@ -38,25 +38,40 @@ Read `{workspace}/data/concepts.jsonl` (if exists). Build concept vocabulary: a 
 ### Step 4: Extract Each Paper
 For each un-extracted paper:
 
-**A. Read paper content:**
+**A. Read paper content and prepare extraction context:**
 - Check `{workspace}/papers/{paper_id}.*` (replace `/` and `:` with `_`)
-- If text file exists: read full text
-- If no text: use abstract + metadata from the paper's record in included.jsonl
-- Note which source was used (full_text vs abstract)
+- If text file exists (full text available):
+  1. Run: `python3 {PLUGIN_DIR}/lib/cli.py parse-sections --file {workspace}/papers/{paper_id}.txt`
+  2. This returns a JSON array of sections with headings, levels, and character counts
+  3. Note the document structure for use in field extraction below
+  4. Set `source = "full_text"`
+- If no text file: use abstract + metadata from the paper's record in included.jsonl
+  1. Set `source = "abstract"`
 
 **B. Extract each schema field:**
 For each field in the extraction schema:
-1. Read the paper looking for information matching this field
-2. Extract the value
-3. Identify where in the paper the information was found
-4. Assess confidence: high (explicit statement), medium (inferred from context), low (abstract only or ambiguous)
-5. Record:
+
+**If source == "full_text" (section-guided extraction):**
+1. Run: `python3 {PLUGIN_DIR}/lib/cli.py parse-sections --file {workspace}/papers/{paper_id}.txt --field {field_name}`
+2. This returns focused context: only the sections most likely to contain information for this field
+3. Read the returned context (typically 1-3 sections, much smaller than the full paper)
+4. Extract the value from the focused context
+5. Record the section heading(s) used as `source_location`
+6. Assess confidence: high (explicit statement in relevant section), medium (inferred from context), low (field not found in expected sections, fell back to full document)
+
+**If source == "abstract" (abstract-only extraction):**
+1. Read abstract + metadata
+2. Extract what's available
+3. Record source_location as "abstract"
+4. Confidence ceiling is "medium" for most fields (abstract rarely contains full detail)
+
+Record each extraction:
 ```json
 {
   "field_name": "{name}",
   "value": "{extracted value}",
-  "source_location": "{page X / section Y / 'abstract'}",
-  "confidence": "high"
+  "source_location": "{section heading(s) or 'abstract'}",
+  "confidence": "high|medium|low"
 }
 ```
 
@@ -94,6 +109,9 @@ Append to `{workspace}/data/extractions.jsonl`:
   "concepts_identified": ["concept-slug-1", "concept-slug-2"]
 }
 ```
+
+**Extraction quality note:**
+Papers with full text (arXiv + Unpaywall downloads) produce richer extractions with higher confidence. Papers with abstracts only have a confidence ceiling of "medium" and may have empty values for detail-oriented fields (methodology specifics, exact results, limitations). This is expected and honest — the synthesis agent accounts for the `source` field when weighting findings.
 
 ### Step 5: Update Concept Matrix
 After all extractions in this batch, update `{workspace}/concept-matrix.md`:
