@@ -1,6 +1,6 @@
 # Scholar Hardening Design: Full Stack Verification + Capability Expansion
 
-*Version 1.0 — 2026-03-22*
+*Version 1.1 — 2026-03-22*
 
 ---
 
@@ -35,6 +35,12 @@ Two cross-cutting concerns govern every section:
 
 ## 1. OracleContracts for Inference Calls
 
+### 1.0 Axiom Impact
+
+- **Strengthens A1:** Inference quarantine becomes runtime-enforced via contracts, not just runbook convention.
+- **Preserves A3:** Recovery actions produce visible markers in append-only logs, not silent skips.
+- **Enables A11:** Each inference point is now classifiable as "runtime-monitored" with a named contract.
+
 ### 1.1 Problem
 
 Scholar has 4 inference points: screening (Phase 2/3), extraction (Phase 4), concept identification (Phase 4), and synthesis (Phase 5). The runbooks describe inference quarantine as convention — "log evidence," "record confidence" — but there is no runtime enforcement. A sub-agent could skip logging or return malformed judgments, and the postcondition checker would not catch it until the phase ends.
@@ -47,7 +53,7 @@ Create per-record validation functions in `lib/postconditions.py` as atomic vali
 
 #### SCREEN_CRITERION
 
-Validates a single criterion evaluation within a screening record.
+Validates a single criterion evaluation within a screening record. **Applies to both Phase 2 (screening) and Phase 3 (snowballing) — the snowball agent performs the same criterion-based assessment and must satisfy the same contracts.**
 
 **Postconditions:**
 - `met` in {yes, no, unclear}
@@ -60,15 +66,16 @@ Validates a single criterion evaluation within a screening record.
 
 #### SCREEN_DECISION
 
-Validates a complete screening decision record.
+Validates a complete screening decision record. **Applies to both Phase 2 and Phase 3.**
 
 **Postconditions:**
 - `decision` in {include, exclude, flag_for_full_text}
 - `criteria_evaluations` is non-empty list
 - `reasoning` is non-empty string
-- **Biconditional decision rule (both directions):**
-  - If `decision=include`: all inclusion criteria have `met=yes` AND no exclusion criterion has `met=yes`
-  - If `decision` not in {include}: at least one IC has `met != yes` OR at least one EC has `met=yes` OR at least one criterion has `met=unclear`
+- **Biconditional decision rule (per decision type):**
+  - If `decision=include`: all IC have `met=yes` AND no EC has `met=yes`
+  - If `decision=exclude`: at least one EC has `met=yes` OR at least one IC has `met=no`
+  - If `decision=flag_for_full_text`: at least one criterion has `met=unclear` AND no EC has `met=yes`
 
 **Recovery:** On biconditional violation, reject the decision. Agent must re-evaluate. If re-evaluation also fails, exclude with `reasoning="decision_rule_violation"`.
 
@@ -81,7 +88,9 @@ Validates a single field extraction.
 - `value` is non-empty string or equals "extraction_failed"
 - `confidence` in {high, medium, low}
 - `source_location` is non-empty string
-- If parent record `source=abstract`: `confidence != high`
+- **Confidence-source biconditional:**
+  - If parent record `source=abstract`: `confidence != high` (abstract lacks sufficient detail for high confidence)
+  - If parent record `source=full_text`: `confidence` may be any of {high, medium, low} (full text can support high confidence)
 
 **Recovery:** On failure, set `value="extraction_failed"`, `confidence=low`, `recovery_applied=true`.
 
@@ -90,7 +99,7 @@ Validates a single field extraction.
 Validates a concept identification.
 
 **Postconditions:**
-- `concept_id` matches pattern `^[a-z0-9][a-z0-9-]*[a-z0-9]$`
+- `concept_id` matches pattern `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (minimum 2 characters; single-character concepts are rejected as too ambiguous)
 - `label` is non-empty string
 - `definition` is non-empty string with length >= 10
 - `frequency` >= 1
@@ -102,7 +111,7 @@ Validates a concept identification.
 Validates synthesis output integrity.
 
 **Postconditions:**
-- Every paragraph in Findings (Section 3.2) contains >= 1 `[@key]` citation
+- Every paragraph in Findings by Theme (review.md Section 3.2) contains >= 1 `[@key]` citation
 - No `[@key]` references a bibtex_key absent from included papers
 - Papers where > 50% of extraction fields have `value="extraction_failed"` are not cited in body text without a qualification marker (e.g., "[limited data]") — they may appear in Appendix A without qualification
 
@@ -170,6 +179,12 @@ No duplication. `postconditions.py` owns validation logic. `oracle_contracts.py`
 
 ## 2. Deterministic Preprocessing of Inference Inputs
 
+### 2.0 Axiom Impact
+
+- **Preserves A1:** Pure functions, zero inference calls. Deterministic-first applied to inference input preparation.
+- **Preserves A2:** Preprocessed files are derived artifacts in the workspace, regenerable from raw data.
+- **Preserves A3:** Raw data remains authoritative. Preprocessed files are additive, not replacing.
+
 ### 2.1 Problem
 
 Scholar feeds raw text to inference agents. The quality of screening judgments and synthesis depends on how well relevant signal is surfaced in the input. The section parser (`lib/section_parser.py`) does this for extraction but not for screening or synthesis.
@@ -235,6 +250,12 @@ The orchestrator skill runs `preprocess --type screening` after Phase 1 complete
 
 ## 3. PRISMA-Compliant Output Format
 
+### 3.0 Axiom Impact
+
+- **Supports A3:** PRISMA checklist makes auditability visible to external reviewers, not just workspace-internal.
+- **Supports A7:** Reproducibility information (queries, decisions, logs) is surfaced in the PRISMA-trAIce appendix.
+- **No axiom violations:** Output format changes are additive. Existing workspace structure unchanged.
+
 ### 3.1 Problem
 
 Scholar's output is a custom markdown template that resembles Kitchenham's reporting structure but doesn't formally comply with PRISMA 2020 or PRISMA-trAIce. Researchers cannot validate compliance, hand off to team review tools, or submit without manual conversion.
@@ -292,7 +313,7 @@ def check_prisma_traice_compliance(
 ) -> tuple[bool, list[dict]]:
 ```
 
-Same checklist format. 7 items from the 2025 JMIR AI publication. Scholar's architecture satisfies most:
+Same checklist format. 7 items from the 2025 JMIR AI publication (PRISMA-trAIce, doi:10.2196/80247). Scholar's architecture satisfies most. **Note:** The items below are paraphrased for brevity. The implementation must use exact item text from the published checklist.
 
 | trAIce Item | Scholar Feature | Status |
 |------------|----------------|--------|
@@ -315,6 +336,8 @@ Human oversight is `partially_satisfied` because oversight is at the protocol le
 
 The Phase 5 postcondition (`check_phase5_all`) validates structural completeness. The PRISMA checker validates methodological completeness. These are complementary concerns at different levels.
 
+**Coordination point:** When the `prisma_2020` template is created (step A3), `REQUIRED_HEADERS` in `postconditions.py` must be updated to include Appendix C and Appendix D, or made configurable per `output_format`. The `kitchenham` format retains the current header set; `prisma_2020` extends it; `narrative` relaxes it.
+
 ### 3.6 PRISMA Flow Diagram
 
 The synthesis agent generates a Mermaid-syntax PRISMA 2020 flow diagram in Section 3.1:
@@ -330,7 +353,20 @@ graph TD
     F --> H[Full-text excluded with reasons\nn = {ft_excluded}]
 ```
 
-Values are computed from workspace metrics. This is a recognizable PRISMA artifact that reviewers expect.
+Values are computed from workspace metrics:
+
+| Variable | Source | Metric |
+|----------|--------|--------|
+| `search_candidates` | candidates.jsonl | count where `source=search` |
+| `snowball_candidates` | candidates.jsonl | count where `source` starts with `snowball_` |
+| `deduplicated` | candidates.jsonl | total count (already deduplicated) |
+| `screened` | screening-log.jsonl | count of final decisions |
+| `excluded` | screening-log.jsonl | count where `decision=exclude` |
+| `flagged` | screening-log.jsonl | count of `flag_for_full_text` entries |
+| `ft_excluded` | screening-log.jsonl | count where initial `flag_for_full_text` resolved to `exclude` |
+| `included` | included.jsonl | total count |
+
+This is a recognizable PRISMA artifact that reviewers expect.
 
 ### 3.7 Configurable Output Formats
 
@@ -377,6 +413,11 @@ The `prisma_2020` format is the reference implementation. It follows Thomas & Ha
 
 ## 4. Dafny-Verified State Machine
 
+### 4.0 Axiom Impact
+
+- **Fulfills A11:** State machine and saturation module move from "tested" to "statically verified."
+- **Preserves all axioms:** Dafny specs are companion artifacts. Runtime Python unchanged.
+
 ### 4.1 Problem
 
 Scholar's `lib/state.py` implements a 6-phase state machine as pure functions with documented invariants. The properties are tested in Python but not formally proved. A formal proof would make Scholar the only research tool with a verified orchestration core.
@@ -410,11 +451,15 @@ datatype State = State(
   phaseCompleted: seq<bool>
 )
 
+// maxFeedbackIterations is a protocol-level constant, not hardcoded.
+// The Dafny spec parameterizes it; the Python reads it from protocol.md.
+const MAX_FEEDBACK_ITERATIONS: nat := 2  // default; matches protocol template
+
 predicate ValidState(s: State) {
   0 <= s.currentPhase <= 5 &&
   |s.phaseCompleted| == 6 &&
   s.retryCount <= 1 &&
-  s.feedbackIterations <= 2
+  s.feedbackIterations <= MAX_FEEDBACK_ITERATIONS
 }
 
 predicate MonotonicCompleted(before: seq<bool>, after: seq<bool>) {
@@ -441,15 +486,16 @@ method TransitionToNext(s: State) returns (s': State)
   );
 }
 
-method FeedbackLoop(s: State, maxIterations: nat) returns (s': State)
+method FeedbackLoop(s: State) returns (s': State)
   requires ValidState(s)
   requires s.currentPhase == 4
   requires s.phaseStatus == Completed
-  requires s.feedbackIterations < maxIterations
+  requires s.feedbackIterations < MAX_FEEDBACK_ITERATIONS
   ensures ValidState(s')
   ensures s'.currentPhase == 3
   ensures s'.phaseStatus == Pending
   ensures s'.feedbackIterations == s.feedbackIterations + 1
+  ensures s'.feedbackIterations <= MAX_FEEDBACK_ITERATIONS
 {
   s' := State(
     3,
@@ -620,7 +666,7 @@ python3 lib/cli.py export --format csv --dataset candidates --workspace ~/resear
 |------|---------|-------------------|--------------|
 | A1 | Oracle Contracts | `lib/postconditions.py` (add per-record validators), `lib/oracle_contracts.py` (new), `lib/cli.py` (add validate-inference) | None |
 | A2 | Deterministic Preprocessing | `lib/preprocess.py` (new), `lib/cli.py` (add preprocess), runbooks updated | A1 (recovery flags used by synthesis preprocessor) |
-| A3 | PRISMA Output | `lib/prisma.py` (new), `lib/export.py` (new), `lib/cli.py` (add prisma, export), templates (new prisma/narrative), `skills/research/SKILL.md` (output config), runbooks updated | A2 (preprocessed synthesis uses data completeness) |
+| A3 | PRISMA Output | `lib/prisma.py` (new), `lib/export.py` (new — module created with PRISMA Mermaid diagram generation only), `lib/cli.py` (add prisma), templates (new prisma/narrative), `skills/research/SKILL.md` (output config), runbooks updated | A2 (preprocessed synthesis uses data completeness) |
 | A4 | Dafny Verification | `spec/state.dfy` (new), `spec/saturation.dfy` (new) | None (parallel to A1-A3) |
 | A5 | Expert Panel | `docs/methodology/EXPERT_ROSTER.md` (new), `docs/methodology/CHANGE_PROTOCOL.md` (new) | None (parallel, documentation only) |
 
@@ -632,7 +678,7 @@ python3 lib/cli.py export --format csv --dataset candidates --workspace ~/resear
 | B2 | Scite MCP | `runbooks/screen.md`, `runbooks/extract.md` | B1 |
 | B3 | paper-search-mcp | `runbooks/search.md`, `templates/protocol-template.md` | B1 |
 | B4 | Hallucination Detection | `lib/postconditions.py` | A1, A3 |
-| B5 | RIS/CSV Export | `lib/export.py` (may already exist from A3), `lib/cli.py` | A3 |
+| B5 | RIS/CSV Export | `lib/export.py` (extend module created in A3 with `to_ris()` and `to_csv()`), `lib/cli.py` (add export subcommand) | A3 |
 
 ---
 
@@ -663,12 +709,12 @@ python3 lib/cli.py export --format csv --dataset candidates --workspace ~/resear
 
 Extending Scholar's existing P1-P7:
 
-**P8 — Inference Quarantine Enforcement:** Every inference call in Phases 2-5 is validated against a named OracleContract before its output is written to workspace files. Validation is structural (not semantic). Failed validation triggers a documented recovery strategy.
+**P8 — Inference Quarantine Enforcement:** For every record `r` written to workspace files by Phases 2-5 where the generating function uses inference, there exists a `_validated_by` metadata field where `_validated_by.contract_id` is a named OracleContract and `_validated_by.satisfied` is a boolean. If `_validated_by.satisfied == false`, then `_validated_by.recovery_applied == true` and the record contains the recovery output defined by the contract's recovery strategy. Formally: `forall r in workspace_records : uses_inference(r) ==> r._validated_by != null AND (r._validated_by.satisfied OR r._validated_by.recovery_applied)`.
 
-**P9 — Preprocessing Determinism:** `preprocess.py` functions are pure and deterministic. Same inputs produce same outputs. No inference calls.
+**P9 — Preprocessing Determinism:** For all functions `f` in `preprocess.py`: `f(x) == f(x)` for all inputs `x` (referential transparency). No function in the module makes inference calls, network requests, or reads mutable state. Formally: `preprocess.py ∩ inference_calls = ∅`.
 
-**P10 — PRISMA Transparency:** The output includes a complete PRISMA 2020 checklist with per-item status (satisfied / partially_satisfied / not_satisfied) and explanatory text. No item is marked not_applicable for core SLR requirements.
+**P10 — PRISMA Transparency:** The output review.md includes a PRISMA 2020 checklist (Appendix C) with an entry for each of the 27 items. Each entry has `status` in {satisfied, partially_satisfied, not_satisfied} and a non-empty `explanation` string. No core SLR item uses a status outside this set. Formally: `forall item in prisma_checklist : item.status in {satisfied, partially_satisfied, not_satisfied} AND |item.explanation| > 0`.
 
-**P11 — State Machine Soundness:** The Dafny specification in `spec/state.dfy` verifies all state machine properties. `dafny verify` succeeds with zero errors.
+**P11 — State Machine Soundness:** `dafny verify spec/state.dfy` and `dafny verify spec/saturation.dfy` succeed with zero errors. The Dafny specification covers all 7 state machine properties (forward progress, no skipping, feedback bound, retry bound, terminal correctness, monotonic completion, status validity) and all 4 saturation properties (range [0,1], zero-denominator safety, termination threshold, feedback bound).
 
-**P12 — Export Fidelity:** RIS and CSV exports preserve all metadata fields present in the source JSONL. No data loss during format conversion.
+**P12 — Export Fidelity:** For every record `r` in the source JSONL and every metadata field `f` in `r`: the corresponding RIS or CSV output contains `f`'s value. Formally: `forall r in source, f in r.fields : f in export(r).fields AND export(r).fields[f] == r.fields[f]`.
