@@ -75,7 +75,7 @@ Validates a complete screening decision record. **Applies to both Phase 2 and Ph
 - **Biconditional decision rule (per decision type):**
   - If `decision=include`: all IC have `met=yes` AND no EC has `met=yes`
   - If `decision=exclude`: at least one EC has `met=yes` OR at least one IC has `met=no`
-  - If `decision=flag_for_full_text`: at least one criterion has `met=unclear` AND no EC has `met=yes`
+  - If `decision=flag_for_full_text`: at least one criterion has `met=unclear` AND no EC has `met=yes` (design intent: a confirmed exclusion from abstract is definitive; unclear criteria warrant full-text review but confirmed exclusions do not)
 
 **Recovery:** On biconditional violation, reject the decision. Agent must re-evaluate. If re-evaluation also fails, exclude with `reasoning="decision_rule_violation"`.
 
@@ -711,7 +711,7 @@ Extending Scholar's existing P1-P7:
 
 **P8 — Inference Quarantine Enforcement:** For every record `r` written to workspace files by Phases 2-5 where the generating function uses inference, there exists a `_validated_by` metadata field where `_validated_by.contract_id` is a named OracleContract and `_validated_by.satisfied` is a boolean. If `_validated_by.satisfied == false`, then `_validated_by.recovery_applied == true` and the record contains the recovery output defined by the contract's recovery strategy. Formally: `forall r in workspace_records : uses_inference(r) ==> r._validated_by != null AND (r._validated_by.satisfied OR r._validated_by.recovery_applied)`.
 
-**P9 — Preprocessing Determinism:** For all functions `f` in `preprocess.py`: `f(x) == f(x)` for all inputs `x` (referential transparency). No function in the module makes inference calls, network requests, or reads mutable state. Formally: `preprocess.py ∩ inference_calls = ∅`.
+**P9 — Preprocessing Determinism:** For all functions `f` in `preprocess.py`, `f(x)` is determined entirely by `x` — no function reads mutable global state, performs I/O, or calls inference. Formally: `preprocess.py ∩ inference_calls = ∅`, and for all inputs `x`, repeated invocations `f(x)` yield identical results regardless of invocation context.
 
 **P10 — PRISMA Transparency:** The output review.md includes a PRISMA 2020 checklist (Appendix C) with an entry for each of the 27 items. Each entry has `status` in {satisfied, partially_satisfied, not_satisfied} and a non-empty `explanation` string. No core SLR item uses a status outside this set. Formally: `forall item in prisma_checklist : item.status in {satisfied, partially_satisfied, not_satisfied} AND |item.explanation| > 0`.
 
