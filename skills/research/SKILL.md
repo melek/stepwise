@@ -238,6 +238,19 @@ Confirm or set:
 - Language (default: English only, or list accepted languages)
 - Venue constraints (specific conferences/journals to require or exclude, or "none")
 
+**Field 9: Output Configuration**
+
+Set the output format and compliance options:
+
+| Parameter | Default | Options |
+|-----------|---------|---------|
+| `output_format` | `prisma_2020` | `prisma_2020`, `kitchenham`, `narrative`, `custom` |
+| `citation_style` | `bibtex_keys` | `bibtex_keys`, `numbered`, `author_year` |
+| `include_prisma_checklist` | `true` | `true`, `false` |
+| `include_traice_checklist` | `true` | `true`, `false` |
+
+Explain: `prisma_2020` (default) produces full PRISMA 2020 structure with flow diagram and compliance appendices. `kitchenham` is the classic SLR format. `narrative` is lighter for scoping reviews. `custom` lets the user provide their own template.
+
 ### Step 3.3: Present the Complete Protocol for Review
 
 After all fields are filled, assemble the complete protocol and present it to the user in a clean markdown block. Ask:
@@ -372,6 +385,7 @@ Read and follow the runbook at {PLUGIN_DIR}/runbooks/screen.md exactly.
 
 Workspace: {WORKSPACE}
 Protocol: {WORKSPACE}/protocol.md
+Preprocessed evidence windows are available at {WORKSPACE}/data/preprocessed-screening.jsonl. Use them for focused criterion evaluation; consult the full abstract if the window is insufficient. If the file does not exist, proceed using raw abstracts only.
 
 Execute all steps in the runbook. Write all output files to the workspace as specified. When complete, summarize what you did and what files you wrote.
 ```
@@ -422,6 +436,7 @@ Read and follow the runbook at {PLUGIN_DIR}/runbooks/synthesize.md exactly.
 
 Workspace: {WORKSPACE}
 Protocol: {WORKSPACE}/protocol.md
+Preprocessed synthesis briefs are available at {WORKSPACE}/data/preprocessed-synthesis.json. Use them for themed evidence organization and data completeness awareness. If the file does not exist, organize themes from raw JSONL files.
 
 Execute all steps in the runbook. Write all output files to the workspace as specified. When complete, summarize what you did and what files you wrote.
 ```
@@ -439,7 +454,20 @@ After each phase passes its postconditions, apply the following transition rules
 
 ### Phase 1 → Phase 2
 
-Direct transition. No conditions. Update `state.json` to `current_phase: 2, phase_status: "pending"`.
+Before transitioning, run screening preprocessing to generate evidence windows:
+
+```bash
+python3 {PLUGIN_DIR}/lib/cli.py preprocess --type screening --workspace {WORKSPACE}
+```
+
+This creates `{WORKSPACE}/data/preprocessed-screening.jsonl`. Log a `preprocess` event to `phase-log.jsonl`:
+```json
+{"event": "preprocess", "type": "screening", "timestamp": "{ISO-8601}", "records": {N}}
+```
+
+If the preprocess command fails, log `preprocess_failed` and continue — preprocessing is advisory, not blocking.
+
+Then update `state.json` to `current_phase: 2, phase_status: "pending"`.
 
 ### Phase 2 → Phase 3 (or diagnostic)
 
@@ -500,6 +528,11 @@ Read `feedback_iterations` from `state.json`. Read `max_feedback_iterations` and
     ```
   - Update `state.json` to `current_phase: 5, phase_status: "pending"`
   - Update `state.json` metrics: `conceptual_saturation: Δ`
+  - Run synthesis preprocessing to generate themed briefs:
+    ```bash
+    python3 {PLUGIN_DIR}/lib/cli.py preprocess --type synthesis --workspace {WORKSPACE}
+    ```
+    Log a `preprocess` event. If it fails, log and continue.
   - Proceed to Phase 5.
 
 ### Phase 5 → Done
