@@ -92,6 +92,44 @@ def validate_screening_decision(record: dict) -> tuple[bool, list[str]]:
     return _result(failures)
 
 
+_CONCEPT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+
+def validate_extraction_field(
+    record: dict, parent_source: str = "full_text"
+) -> tuple[bool, list[str]]:
+    """Validate a single extraction field record."""
+    failures = []
+    if not record.get("field_name"):
+        failures.append("field_name: empty or missing")
+    if not record.get("value"):
+        failures.append("value: empty or missing")
+    conf = record.get("confidence")
+    if conf not in ("high", "medium", "low"):
+        failures.append(f"confidence: {conf!r} not in {{high, medium, low}}")
+    if not record.get("source_location"):
+        failures.append("source_location: empty or missing")
+    if parent_source == "abstract" and conf == "high":
+        failures.append("confidence: 'high' not allowed when source is abstract")
+    return _result(failures)
+
+
+def validate_concept_record(record: dict) -> tuple[bool, list[str]]:
+    """Validate a concept identification record."""
+    failures = []
+    cid = record.get("concept_id", "")
+    if not _CONCEPT_ID_PATTERN.match(cid):
+        failures.append(f"concept_id: {cid!r} does not match slug pattern (min 2 chars, lowercase)")
+    if not record.get("label"):
+        failures.append("label: empty or missing")
+    defn = record.get("definition", "")
+    if len(defn) < 10:
+        failures.append(f"definition: too short ({len(defn)} chars, need >= 10)")
+    freq = record.get("frequency", 0)
+    if not isinstance(freq, int) or freq < 1:
+        failures.append(f"frequency: {freq!r} must be int >= 1")
+    return _result(failures)
+
+
 # ============================================================
 # Phase 1 — Search
 # ============================================================

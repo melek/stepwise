@@ -195,3 +195,90 @@ def test_empty_reasoning_fails():
     }
     ok, failures = validate_screening_decision(record)
     assert ok is False
+
+
+from lib.postconditions import validate_extraction_field, validate_concept_record
+
+
+# --- EXTRACT_FIELD ---
+
+def test_valid_extraction_field():
+    record = {"field_name": "methodology", "value": "randomized controlled trial",
+              "confidence": "high", "source_location": "Section 3: Methods"}
+    ok, failures = validate_extraction_field(record, parent_source="full_text")
+    assert ok is True
+
+def test_abstract_source_high_confidence_fails():
+    record = {"field_name": "methodology", "value": "RCT", "confidence": "high",
+              "source_location": "abstract"}
+    ok, failures = validate_extraction_field(record, parent_source="abstract")
+    assert ok is False
+    assert any("confidence" in f for f in failures)
+
+def test_abstract_source_medium_confidence_ok():
+    record = {"field_name": "methodology", "value": "RCT", "confidence": "medium",
+              "source_location": "abstract"}
+    ok, failures = validate_extraction_field(record, parent_source="abstract")
+    assert ok is True
+
+def test_extraction_failed_value_ok():
+    record = {"field_name": "methodology", "value": "extraction_failed",
+              "confidence": "low", "source_location": "abstract"}
+    ok, failures = validate_extraction_field(record, parent_source="abstract")
+    assert ok is True
+
+def test_empty_field_name_fails():
+    record = {"field_name": "", "value": "something", "confidence": "medium",
+              "source_location": "abstract"}
+    ok, failures = validate_extraction_field(record, parent_source="full_text")
+    assert ok is False
+
+def test_invalid_confidence_fails():
+    record = {"field_name": "methodology", "value": "something", "confidence": "very_high",
+              "source_location": "Section 3"}
+    ok, failures = validate_extraction_field(record, parent_source="full_text")
+    assert ok is False
+
+def test_empty_value_fails():
+    record = {"field_name": "methodology", "value": "", "confidence": "medium",
+              "source_location": "Section 3"}
+    ok, failures = validate_extraction_field(record, parent_source="full_text")
+    assert ok is False
+
+
+# --- IDENTIFY_CONCEPTS ---
+
+def test_valid_concept():
+    record = {"concept_id": "formal-verification", "label": "Formal Verification",
+              "definition": "The use of mathematical proofs to verify system correctness",
+              "frequency": 3}
+    ok, failures = validate_concept_record(record)
+    assert ok is True
+
+def test_single_char_concept_id_fails():
+    record = {"concept_id": "x", "label": "X",
+              "definition": "Some concept with a single character ID", "frequency": 1}
+    ok, failures = validate_concept_record(record)
+    assert ok is False
+    assert any("concept_id" in f for f in failures)
+
+def test_short_definition_fails():
+    record = {"concept_id": "formal-verification", "label": "Formal Verification",
+              "definition": "Proofs", "frequency": 1}
+    ok, failures = validate_concept_record(record)
+    assert ok is False
+    assert any("definition" in f for f in failures)
+
+def test_zero_frequency_fails():
+    record = {"concept_id": "formal-verification", "label": "Formal Verification",
+              "definition": "The use of mathematical proofs to verify system correctness",
+              "frequency": 0}
+    ok, failures = validate_concept_record(record)
+    assert ok is False
+
+def test_concept_id_with_uppercase_fails():
+    record = {"concept_id": "Formal-Verification", "label": "Formal Verification",
+              "definition": "The use of mathematical proofs to verify system correctness",
+              "frequency": 1}
+    ok, failures = validate_concept_record(record)
+    assert ok is False
