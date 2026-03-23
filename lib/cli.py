@@ -25,6 +25,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from . import metrics as m
+from . import oracle_contracts as oc
 from . import postconditions as pc
 from . import saturation as sat
 from . import section_parser as sp
@@ -395,6 +396,36 @@ def cmd_parse_sections(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_validate_inference(args: argparse.Namespace) -> None:
+    if args.record:
+        record = json.loads(args.record)
+    elif args.file:
+        record = json.loads(Path(args.file).read_text())
+    else:
+        print(json.dumps({"error": "Provide --record or --file"}))
+        sys.exit(1)
+
+    contracts = {
+        "SCREEN_CRITERION": oc.SCREEN_CRITERION,
+        "SCREEN_DECISION": oc.SCREEN_DECISION,
+        "EXTRACT_FIELD": oc.EXTRACT_FIELD,
+        "IDENTIFY_CONCEPTS": oc.IDENTIFY_CONCEPTS,
+        "SYNTHESIZE_CLAIM": oc.SYNTHESIZE_CLAIM,
+    }
+    contract = contracts.get(args.contract)
+    if not contract:
+        print(json.dumps({"error": f"Unknown contract: {args.contract}"}))
+        sys.exit(1)
+
+    kwargs = {}
+    if args.contract == "EXTRACT_FIELD" and args.parent_source:
+        kwargs["parent_source"] = args.parent_source
+
+    result = oc.validate_and_recover(record, contract, **kwargs)
+    json.dump(result["validation"], sys.stdout, indent=2)
+    print()
+
+
 # --- Argument parser ---
 
 def main() -> None:
@@ -432,6 +463,15 @@ def main() -> None:
     p_sections.add_argument("--field", help="Optional: get extraction context for a specific field")
     p_sections.add_argument("--max-chars", type=int, default=8000, help="Max context chars (default 8000)")
 
+    # validate-inference
+    p_val = sub.add_parser("validate-inference", help="Validate a record against an oracle contract")
+    p_val.add_argument("--contract", required=True,
+                       choices=["SCREEN_CRITERION", "SCREEN_DECISION", "EXTRACT_FIELD",
+                                "IDENTIFY_CONCEPTS", "SYNTHESIZE_CLAIM"])
+    p_val.add_argument("--record", help="Inline JSON record")
+    p_val.add_argument("--file", help="Path to JSON file containing record")
+    p_val.add_argument("--parent-source", help="Parent extraction source (for EXTRACT_FIELD)")
+
     args = parser.parse_args()
     handlers = {
         "metrics": cmd_metrics,
@@ -439,6 +479,7 @@ def main() -> None:
         "transition": cmd_transition,
         "saturation": cmd_saturation,
         "parse-sections": cmd_parse_sections,
+        "validate-inference": cmd_validate_inference,
     }
     handlers[args.command](args)
 
