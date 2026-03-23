@@ -33,6 +33,26 @@ For each (database, query) pair:
 - Parameters: query={query}, max_results={max_results_per_query}
 - Record each result's: arxiv_id, title, abstract (summary), authors, published year, categories
 
+**PubMed (if available):**
+- Check if `mcp__pubmed__search` is in the tool list. If not, skip and log:
+  ```json
+  {"timestamp": "{ISO-8601}", "event": "pubmed_unavailable", "phase": 1, "details": {"reason": "MCP not configured"}}
+  ```
+- Use `mcp__pubmed__search` with the query string
+- Parameters: query={query}, max_results={max_results_per_query}
+- Record each result's: PMID, title, abstract, authors, year, journal, DOI
+- Map PMID to canonical ID: use DOI if available, else `pmid:{PMID}`
+
+**paper-search-mcp (if available):**
+- Check if `mcp__paper_search__search_papers` is in the tool list. If not, skip and log:
+  ```json
+  {"timestamp": "{ISO-8601}", "event": "paper_search_unavailable", "phase": 1, "details": {"reason": "MCP not configured"}}
+  ```
+- Use `mcp__paper_search__search_papers` with the query string
+- This searches 20+ databases simultaneously (IEEE Xplore, ACM, DBLP, CrossRef, OpenAlex, CORE, etc.)
+- Deduplicate results against existing candidates using DOI matching
+- Record source as "paper-search-mcp" in `discovered_by_query`
+
 After each query, append to `logs/search-log.jsonl`:
 ```json
 {"query": "{query}", "database": "{database}", "timestamp": "{ISO-8601}", "result_count": {N}, "parameters": {"limit": {N}, "year_range": "{start}-{end}"}}
@@ -149,6 +169,8 @@ Pace all API calls to respect documented rate limits. Do NOT fire requests as fa
 | Semantic Scholar | 1 second |
 | arXiv | 3 seconds |
 | Unpaywall | 1 second |
+| PubMed | 0.33 seconds (3 RPS) |
+| Scite | 1 second |
 
 Use `sleep` or equivalent between consecutive calls to the same API.
 
