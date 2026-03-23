@@ -93,6 +93,7 @@ def validate_screening_decision(record: dict) -> tuple[bool, list[str]]:
 
 
 _CONCEPT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+_CITATION_PATTERN = re.compile(r"\[@([^\]]+)\]")
 
 def validate_extraction_field(
     record: dict, parent_source: str = "full_text"
@@ -127,6 +128,41 @@ def validate_concept_record(record: dict) -> tuple[bool, list[str]]:
     freq = record.get("frequency", 0)
     if not isinstance(freq, int) or freq < 1:
         failures.append(f"frequency: {freq!r} must be int >= 1")
+    return _result(failures)
+
+
+def validate_synthesis_claims(
+    paragraphs: list[dict],
+    included_keys: set[str],
+    extraction_completeness: dict[str, float],
+    completeness_threshold: float = 0.5,
+) -> tuple[bool, list[str]]:
+    """Validate synthesis claim integrity.
+
+    Each paragraph in Findings must have >= 1 citation.
+    No citation may reference a key absent from included papers.
+    Papers with low data completeness need a qualification marker.
+    """
+    failures = []
+    for para in paragraphs:
+        text = para.get("text", "")
+        section = para.get("section", "?")
+        citations = _CITATION_PATTERN.findall(text)
+
+        if not citations:
+            failures.append(f"Section {section}: paragraph has no citations")
+            continue
+
+        for key in citations:
+            if key not in included_keys:
+                failures.append(f"Section {section}: citation [@{key}] references absent paper")
+            elif extraction_completeness.get(key, 1.0) < completeness_threshold:
+                if "[limited data]" not in text and "[limited]" not in text:
+                    failures.append(
+                        f"Section {section}: [@{key}] has low data completeness "
+                        f"({extraction_completeness[key]:.0%}) and needs qualification marker"
+                    )
+
     return _result(failures)
 
 

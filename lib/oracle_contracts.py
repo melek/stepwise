@@ -84,6 +84,12 @@ IDENTIFY_CONCEPTS = OracleContract(
     recovery=_recover_concept,
 )
 
+SYNTHESIZE_CLAIM = OracleContract(
+    contract_id="SYNTHESIZE_CLAIM",
+    validator=pc.validate_synthesis_claims,
+    recovery=_no_recovery,
+)
+
 
 def validate_and_recover(
     record: dict, contract: OracleContract, **kwargs

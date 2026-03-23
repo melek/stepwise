@@ -376,3 +376,56 @@ def test_extract_field_override_parent_source():
     recovered = result["record"]
     assert recovered["value"] == "extraction_failed"
     assert recovered["confidence"] == "low"
+
+
+from lib.postconditions import validate_synthesis_claims
+
+
+def test_valid_synthesis_paragraph():
+    paragraphs = [
+        {"text": "Formal verification improves reliability [@dijkstra1968].", "section": "3.2"},
+    ]
+    included_keys = {"dijkstra1968", "leino2010"}
+    extraction_completeness = {"dijkstra1968": 1.0, "leino2010": 0.8}
+    ok, failures = validate_synthesis_claims(paragraphs, included_keys, extraction_completeness)
+    assert ok is True
+
+
+def test_paragraph_without_citation_fails():
+    paragraphs = [
+        {"text": "Formal verification improves reliability.", "section": "3.2"},
+    ]
+    ok, failures = validate_synthesis_claims(paragraphs, set(), {})
+    assert ok is False
+    assert any("citation" in f.lower() for f in failures)
+
+
+def test_citation_to_absent_paper_fails():
+    paragraphs = [
+        {"text": "Results show improvement [@ghost2099].", "section": "3.2"},
+    ]
+    included_keys = {"dijkstra1968"}
+    ok, failures = validate_synthesis_claims(paragraphs, included_keys, {})
+    assert ok is False
+    assert any("ghost2099" in f for f in failures)
+
+
+def test_low_completeness_paper_without_qualification_fails():
+    paragraphs = [
+        {"text": "The paper found strong results [@baddata2024].", "section": "3.2"},
+    ]
+    included_keys = {"baddata2024"}
+    extraction_completeness = {"baddata2024": 0.3}
+    ok, failures = validate_synthesis_claims(paragraphs, included_keys, extraction_completeness)
+    assert ok is False
+    assert any("qualification" in f.lower() or "completeness" in f.lower() for f in failures)
+
+
+def test_low_completeness_with_qualification_passes():
+    paragraphs = [
+        {"text": "The paper found results [limited data] [@baddata2024].", "section": "3.2"},
+    ]
+    included_keys = {"baddata2024"}
+    extraction_completeness = {"baddata2024": 0.3}
+    ok, failures = validate_synthesis_claims(paragraphs, included_keys, extraction_completeness)
+    assert ok is True
