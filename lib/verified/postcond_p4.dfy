@@ -1,4 +1,4 @@
-// Scholar Postconditions — Phase 4 (Extraction)
+// Stepwise Postconditions — Phase 4 (Extraction)
 // Verified properties: soundness, completeness, determinism
 
 datatype CheckResult = CheckResult(satisfied: bool, failure_count: int)

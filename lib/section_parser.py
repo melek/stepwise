@@ -1,4 +1,4 @@
-"""Scholar section parser.
+"""Stepwise section parser.
 
 Pure functions for splitting markdown text into sections at heading
 boundaries. No file I/O.

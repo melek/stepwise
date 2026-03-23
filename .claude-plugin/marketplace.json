@@ -1,12 +1,12 @@
 {
-  "name": "scholar",
+  "name": "stepwise",
   "description": "Autonomous systematic literature review following the Kitchenham protocol",
   "owner": {
     "name": "Melek"
   },
   "plugins": [
     {
-      "name": "scholar",
+      "name": "stepwise",
       "source": "./",
       "description": "Autonomous systematic literature review following the Kitchenham protocol",
       "version": "0.1.0"

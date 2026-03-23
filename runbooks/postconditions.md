@@ -39,7 +39,7 @@ The orchestrator executes these checks by reading the relevant files and verifyi
 
 **Transition logic:**
 - If `included.jsonl` is non-empty → transition to Phase 3
-- If `included.jsonl` is empty → **diagnostic transition**: set `phase_status = needs_protocol_revision`. Report: "No papers passed screening. Review protocol criteria and search terms." The `/scholar:continue` skill re-enters Phase 0.
+- If `included.jsonl` is empty → **diagnostic transition**: set `phase_status = needs_protocol_revision`. Report: "No papers passed screening. Review protocol criteria and search terms." The `/stepwise:continue` skill re-enters Phase 0.
 
 **On failure (check failure, not empty included):** Retry phase once. If still failing, record failure reason and terminate.
 

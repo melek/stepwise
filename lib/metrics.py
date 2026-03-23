@@ -1,4 +1,4 @@
-"""Scholar metrics recount.
+"""Stepwise metrics recount.
 
 Pure counting functions over sequences of parsed records. All functions
 take lists of dicts and return integers or a metrics dict. No file I/O.

@@ -1,4 +1,4 @@
-"""Scholar phase state machine.
+"""Stepwise phase state machine.
 
 Pure functions implementing the 6-phase state machine for systematic
 literature reviews. All functions take and return plain data structures

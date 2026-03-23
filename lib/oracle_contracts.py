@@ -1,4 +1,4 @@
-"""Scholar oracle contracts — inference quarantine enforcement.
+"""Stepwise oracle contracts — inference quarantine enforcement.
 
 Each contract wraps a per-record validator from postconditions.py with:
 - Contract identity (named, registered)

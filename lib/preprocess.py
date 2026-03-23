@@ -1,4 +1,4 @@
-"""Scholar deterministic preprocessing.
+"""Stepwise deterministic preprocessing.
 
 Pure functions that transform inference inputs to improve oracle performance.
 No I/O. No inference calls. Deterministic: same inputs produce same outputs.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scholar CLI — thin I/O wrapper over verified pure functions.
+"""Stepwise CLI — thin I/O wrapper over verified pure functions.
 
 This module handles JSONL parsing and filesystem access, then delegates
 to the pure functions in state.py, metrics.py, saturation.py, and
@@ -541,7 +541,7 @@ def cmd_prisma(args: argparse.Namespace) -> None:
 # --- Argument parser ---
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scholar verified CLI")
+    parser = argparse.ArgumentParser(description="Stepwise verified CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # metrics

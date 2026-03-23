@@ -5,7 +5,7 @@ argument-hint: "[research question in quotes]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, ToolSearch, mcp__semantic-scholar__search_paper, mcp__semantic-scholar__get_paper, mcp__semantic-scholar__get_citation, mcp__semantic-scholar__get_authors, mcp__arxiv__search_papers, mcp__arxiv__download_paper, mcp__arxiv__read_paper, mcp__arxiv__list_papers, mcp__unpaywall__unpaywall_search_titles, mcp__unpaywall__unpaywall_get_by_doi, mcp__unpaywall__unpaywall_get_fulltext_links, mcp__unpaywall__unpaywall_fetch_pdf_text, mcp__zotero__zotero_search, mcp__zotero__zotero_get_item, mcp__zotero__zotero_list_collections, mcp__zotero__zotero_get_collection_items, mcp__pubmed__search, mcp__pubmed__get_article, mcp__pubmed__get_related, mcp__scite__search_citations, mcp__scite__get_paper_citations, mcp__paper_search__search_papers, mcp__paper_search__download_with_fallback
 ---
 
-# Scholar: Research Skill Orchestrator
+# Stepwise: Research Skill Orchestrator
 
 You are conducting an autonomous systematic literature review following the Kitchenham SLR protocol. This skill is the master orchestrator: it initializes the workspace, guides the user through protocol definition (Phase 0), and then autonomously executes Phases 1–5 by dispatching sub-agents for each phase.
 
@@ -19,7 +19,7 @@ This skill conducts an autonomous systematic literature review following the Kit
 
 ### Governing Axioms
 
-The Scholar design spec defines seven axioms (A1–A7) that govern all behavior:
+The Stepwise design spec defines seven axioms (A1–A7) that govern all behavior:
 
 - **A1 — Deterministic structure, nondeterministic content.** Process decisions (phase transitions, termination, file routing) are deterministic. Content decisions (relevance judgments, extraction, synthesis) involve inference and are quarantined behind validation gates. `P ∩ C = ∅`.
 - **A2 — Workspace is complete state.** All state resides in the filesystem. No implicit state in memory or context. Any agent with the workspace and runbooks can reconstruct where the review stands.
@@ -48,7 +48,7 @@ Phase 0 is the only interactive phase. After protocol approval, Phases 1–5 run
 
 ### Step 2.1: Obtain the Research Question
 
-If the skill was invoked with an argument (e.g., `/scholar:research "my question"`), use that as the research question.
+If the skill was invoked with an argument (e.g., `/stepwise:research "my question"`), use that as the research question.
 
 If no argument was provided, ask the user:
 > "What is your research question? Please state it as specifically as possible — you can refine it further in the next step."
@@ -358,7 +358,7 @@ After the agent returns, run the postcondition checks for that phase as specifie
     - `updated_at`: current timestamp
   - Log `phase_failed` event to `phase-log.jsonl`
   - Print error message:
-    > "Phase {N} ({name}) failed after retry. Reason: {failure_reason}. The workspace is preserved at {WORKSPACE}. Use `/scholar:continue` to resume after manual inspection."
+    > "Phase {N} ({name}) failed after retry. Reason: {failure_reason}. The workspace is preserved at {WORKSPACE}. Use `/stepwise:continue` to resume after manual inspection."
   - **Terminate.** Do not proceed to the next phase.
 
 ### 4.1 Agent Dispatch Prompts
@@ -485,7 +485,7 @@ Read `{WORKSPACE}/data/included.jsonl`. Count the number of records.
   Print:
   > "No papers passed screening. The included corpus is empty. This typically means the search terms are too narrow, the inclusion criteria are too strict, or the date range excludes relevant work.
   >
-  > To continue: review `{WORKSPACE}/logs/screening-log.jsonl` to understand why papers were excluded, then use `/scholar:continue` to re-enter Phase 0 and revise the protocol."
+  > To continue: review `{WORKSPACE}/logs/screening-log.jsonl` to understand why papers were excluded, then use `/stepwise:continue` to re-enter Phase 0 and revise the protocol."
 
   **Terminate.** Do not proceed.
 
@@ -650,7 +650,7 @@ After Phase 5, print the full statistics summary:
 
 ```
 ═══════════════════════════════════════════════
-  Scholar — Review Complete
+  Stepwise — Review Complete
 ═══════════════════════════════════════════════
   Project:     {project_slug}
   Question:    {research_question}
@@ -709,7 +709,7 @@ At the start of Phase 1, before dispatching the search agent, verify that both S
 ### Workspace Corruption
 
 If `state.json` is unreadable or contains invalid JSON:
-- Report: "Cannot read {WORKSPACE}/state.json. The workspace may be corrupted. Inspect the file manually and correct the JSON, then use `/scholar:continue` to resume."
+- Report: "Cannot read {WORKSPACE}/state.json. The workspace may be corrupted. Inspect the file manually and correct the JSON, then use `/stepwise:continue` to resume."
 - Do not attempt to repair state.json automatically.
 - Terminate.
 
@@ -719,7 +719,7 @@ If individual data files are missing or truncated mid-phase:
 ### Runbook Not Found
 
 If a runbook file does not exist at the expected path (e.g., `{PLUGIN_DIR}/runbooks/search.md`):
-- Report: "Runbook {runbook_path} not found. The plugin installation may be incomplete. Reinstall the Scholar plugin and try again."
+- Report: "Runbook {runbook_path} not found. The plugin installation may be incomplete. Reinstall the Stepwise plugin and try again."
 - Terminate.
 
 ### Unexpected Phase State

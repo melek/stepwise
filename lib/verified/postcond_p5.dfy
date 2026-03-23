@@ -1,4 +1,4 @@
-// Scholar Postconditions — Phase 5 (Synthesis)
+// Stepwise Postconditions — Phase 5 (Synthesis)
 // Verified properties: soundness, completeness, determinism
 
 datatype CheckResult = CheckResult(satisfied: bool, failure_count: int)

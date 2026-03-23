@@ -1,4 +1,4 @@
-"""Scholar export functions.
+"""Stepwise export functions.
 
 Phase A: PRISMA Mermaid flow diagram generation.
 Phase B: RIS and CSV export of JSONL data.

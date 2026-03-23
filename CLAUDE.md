@@ -1,4 +1,4 @@
-# CLAUDE.md — Scholar
+# CLAUDE.md — Stepwise
 
 Autonomous systematic literature review plugin for Claude Code. Implements Kitchenham SLR protocol with Wohlin snowballing, verified inference quarantine, and PRISMA 2020 compliance.
 
@@ -6,7 +6,7 @@ Autonomous systematic literature review plugin for Claude Code. Implements Kitch
 
 ```bash
 # Run tests (85 tests, pytest)
-cd scholar && .venv/bin/python3 -m pytest tests/ -v
+cd stepwise && .venv/bin/python3 -m pytest tests/ -v
 
 # CLI subcommands (all output JSON to stdout)
 python3 -m lib.cli metrics --workspace ~/research/my-project/

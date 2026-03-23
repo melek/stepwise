@@ -1,4 +1,4 @@
-// Scholar Postconditions — Phase 3 (Snowballing)
+// Stepwise Postconditions — Phase 3 (Snowballing)
 // Verified properties: soundness, completeness, determinism
 
 datatype CheckResult = CheckResult(satisfied: bool, failure_count: int)

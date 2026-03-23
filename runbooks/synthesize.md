@@ -187,11 +187,11 @@ For each of the 27 PRISMA 2020 items, evaluate the review and fill the Appendix 
 - `Explanation`: why this status
 - `Section`: which review.md section addresses this item
 
-Items Scholar cannot satisfy by design (Item 11 risk of bias, Item 12 effect measures, Item 14 certainty assessment):
+Items Stepwise cannot satisfy by design (Item 11 risk of bias, Item 12 effect measures, Item 14 certainty assessment):
 - Mark as `not_satisfied` with honest explanation
 
 **9b. PRISMA-trAIce Disclosure (Appendix D):**
-Fill the 7 trAIce items referencing Scholar's architecture:
+Fill the 7 trAIce items referencing Stepwise's architecture:
 - T1: AI tool identification — reference disclosure footer
 - T2: Stage where AI used — reference phase-log.jsonl
 - T3: Human oversight — note protocol approval scope

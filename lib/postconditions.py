@@ -1,4 +1,4 @@
-"""Scholar postcondition checks.
+"""Stepwise postcondition checks.
 
 Pure validation functions for all 5 review phases. Each check takes parsed
 data structures and returns (satisfied: bool, failures: list[str]).

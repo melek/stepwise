@@ -50,7 +50,7 @@ Metrics:
 Phase History:
   {For each entry in phase_history: "Phase {phase}: {started_at} → {completed_at or 'in progress'}"}
 
-Next Action: {describe what /scholar:continue would do}
+Next Action: {describe what /stepwise:continue would do}
 ```
 
 ### 4. Completed Project Report
@@ -59,6 +59,6 @@ If current_phase = 5 and phase_status = completed:
 - Print: "Review complete. Output: {workspace}/review.md"
 
 ### 5. Error Handling
-- If workspace not found: "No project found at ~/research/{slug}/. Use /scholar:research to start a new review."
+- If workspace not found: "No project found at ~/research/{slug}/. Use /stepwise:research to start a new review."
 - If state.json missing or corrupt: "Workspace exists but state.json is missing or unreadable. Manual inspection needed."
-- If ~/research/ doesn't exist: "No research projects found. Use /scholar:research to start your first review."
+- If ~/research/ doesn't exist: "No research projects found. Use /stepwise:research to start your first review."

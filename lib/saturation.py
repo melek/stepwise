@@ -1,4 +1,4 @@
-"""Scholar saturation metrics.
+"""Stepwise saturation metrics.
 
 Pure functions computing discovery and conceptual saturation using
 exact rational arithmetic (fractions.Fraction). No file I/O.
