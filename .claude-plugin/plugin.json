@@ -3,7 +3,8 @@
   "version": "0.2.0",
   "description": "Autonomous systematic literature review with verified inference quarantine, PRISMA compliance, and multi-database search",
   "author": {
-    "name": "Melek"
+    "name": "Lionel Di Giacomo"
   },
+  "repository": "https://github.com/melek/stepwise",
   "license": "MIT"
 }
