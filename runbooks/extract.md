@@ -95,6 +95,16 @@ For each concept identified:
      ```
      Append to `{workspace}/data/concepts.jsonl`
 
+**C-bis. Scite citation classification (optional):**
+If `mcp__scite__search_citations` is in the tool list and the paper has a DOI:
+1. Query Scite for citation statements about this paper
+2. For each citing paper that is also in `included.jsonl`:
+   - Record the citation classification (supporting/contrasting/mentioning)
+   - Add to extraction record: `"scite_context": [{"citing_paper": "id", "classification": "supporting"}]`
+3. This enriches the concept matrix with agreement/disagreement relationships
+
+If Scite MCP is unavailable, skip. Extraction proceeds normally without Scite data.
+
 **D. Write extraction record:**
 Append to `{workspace}/data/extractions.jsonl`:
 ```json

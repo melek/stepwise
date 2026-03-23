@@ -47,6 +47,15 @@ For each IC:
 }
 ```
 
+**A-bis. Enrich with Scite citation context (optional):**
+If `mcp__scite__search_citations` is in the tool list:
+1. Query Scite for the paper's DOI (if available)
+2. Record: total citations, supporting count, contrasting count, mentioning count
+3. If contrasting citations > 30% of total: note this as additional evidence for criterion evaluations
+4. Append Scite context to the evidence field: `"Scite: {supporting} supporting, {contrasting} contrasting, {mentioning} mentioning"`
+
+If Scite MCP is unavailable, skip silently. This step is purely additive — it enriches evidence but never overrides criterion judgments.
+
 **B. Evaluate each exclusion criterion independently:**
 Same process as above, with `criterion_type: "exclusion"`.
 
