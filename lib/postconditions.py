@@ -422,22 +422,18 @@ def check_all_papers_extracted(
 def check_extraction_schema_valid(
     extractions: list[dict],
 ) -> tuple[bool, list[str]]:
-    """Every extraction has source field and valid field entries."""
+    """Every extraction has valid source and field entries. Composes over validate_extraction_field."""
     valid_sources = {"full_text", "abstract"}
-    valid_confidence = {"high", "medium", "low"}
     failures = []
     for ext in extractions:
         pid = ext.get("paper_id", "?")
-        if ext.get("source") not in valid_sources:
+        source = ext.get("source")
+        if source not in valid_sources:
             failures.append(f"Extraction {pid}: invalid or missing source field")
-        for field in ext.get("fields", []):
-            for key in ("field_name", "value", "source_location", "confidence"):
-                if field.get(key) is None:
-                    failures.append(f"Extraction {pid}: field entry missing '{key}'")
-            if field.get("confidence") not in valid_confidence:
-                failures.append(
-                    f"Extraction {pid}: invalid confidence '{field.get('confidence')}'"
-                )
+        for field_rec in ext.get("fields", []):
+            ok, field_failures = validate_extraction_field(field_rec, parent_source=source or "full_text")
+            for ff in field_failures:
+                failures.append(f"Extraction {pid}: {ff}")
     return _result(failures)
 
 
