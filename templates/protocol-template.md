@@ -74,6 +74,15 @@
 | screening_batch_size | [TODO] |
 | extraction_batch_size | [TODO] |
 
+## Output Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| output_format | [TODO: prisma_2020 / kitchenham / narrative / custom] |
+| citation_style | [TODO: bibtex_keys / numbered / author_year] |
+| include_prisma_checklist | [TODO: true / false] |
+| include_traice_checklist | [TODO: true / false] |
+
 ---
 
 *Protocol approved by: [TODO]*
