@@ -597,16 +597,37 @@ def check_bibliography_consistent(
     return (True, [])
 
 
-REQUIRED_HEADERS = {
+REQUIRED_HEADERS_PRISMA = {
+    "Abstract", "Introduction", "Methodology", "Results",
+    "Discussion", "Conclusion", "References", "Appendix A", "Appendix B",
+    "Appendix C", "Appendix D",
+}
+
+REQUIRED_HEADERS_KITCHENHAM = {
     "Abstract", "Introduction", "Methodology", "Results",
     "Discussion", "Conclusion", "References", "Appendix A", "Appendix B",
 }
 
+REQUIRED_HEADERS_NARRATIVE = {
+    "Summary", "Introduction", "Method", "Findings",
+    "Discussion", "Conclusion", "References",
+}
+
+# Default for backward compatibility
+REQUIRED_HEADERS = REQUIRED_HEADERS_KITCHENHAM
+
 
 def check_review_structure(
     review_section_headers: set[str],
+    output_format: str = "kitchenham",
 ) -> tuple[bool, list[str]]:
-    missing = REQUIRED_HEADERS - review_section_headers
+    headers_map = {
+        "prisma_2020": REQUIRED_HEADERS_PRISMA,
+        "kitchenham": REQUIRED_HEADERS_KITCHENHAM,
+        "narrative": REQUIRED_HEADERS_NARRATIVE,
+    }
+    required = headers_map.get(output_format, REQUIRED_HEADERS_KITCHENHAM)
+    missing = required - review_section_headers
     if missing:
         return (False, [f"Missing section headers: {', '.join(sorted(missing))}"])
     return (True, [])
@@ -632,18 +653,26 @@ def check_phase5_all(
     appendix_a_row_count: int,
     included_count: int,
     appendix_keys: set[str] | None = None,
+    output_format: str = "kitchenham",
 ) -> tuple[bool, list[str]]:
     all_failures = []
     if appendix_keys is None:
         appendix_keys = set()
-    for check_fn, args in [
-        (check_all_papers_in_appendix, (included, appendix_keys)),
+
+    # Core checks (all formats)
+    checks = [
         (check_all_questions_addressed, (protocol_questions, question_answers)),
         (check_question_answers_complete, (protocol_questions, question_answers)),
         (check_bibliography_consistent, (bib_entry_count, review_citation_keys)),
-        (check_review_structure, (review_section_headers,)),
-        (check_appendix_row_count, (appendix_a_row_count, included_count)),
-    ]:
+        (check_review_structure, (review_section_headers, output_format)),
+    ]
+
+    # Appendix checks (skip for narrative format — no Appendix A)
+    if output_format != "narrative":
+        checks.append((check_all_papers_in_appendix, (included, appendix_keys)))
+        checks.append((check_appendix_row_count, (appendix_a_row_count, included_count)))
+
+    for check_fn, args in checks:
         _, failures = check_fn(*args)
         all_failures.extend(failures)
     return _result(all_failures)

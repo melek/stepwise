@@ -270,6 +270,14 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
         bib_count = 0
         if bib_path.exists():
             bib_count = len(re.findall(r"^@\w+\{", bib_path.read_text(), re.MULTILINE))
+        # Parse output_format from protocol.md
+        output_format = "kitchenham"
+        protocol_path = workspace / "protocol.md"
+        if protocol_path.exists():
+            ptext = protocol_path.read_text()
+            fmt_match = re.search(r"\|\s*output_format\s*\|\s*(\w+)", ptext)
+            if fmt_match:
+                output_format = fmt_match.group(1).strip()
         satisfied, failures = pc.check_phase5_all(
             data["included"],
             citation_keys,
@@ -280,6 +288,7 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
             appendix_rows,
             len(data["included"]),
             appendix_keys,
+            output_format=output_format,
         )
     else:
         print(json.dumps({"error": f"Invalid phase: {phase}"}))
