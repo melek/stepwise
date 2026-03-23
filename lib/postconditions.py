@@ -10,6 +10,7 @@ Verified properties:
 - Determinism: same inputs → same output
 """
 
+import re
 from fractions import Fraction
 
 
@@ -17,6 +18,27 @@ from fractions import Fraction
 
 def _result(failures: list[str]) -> tuple[bool, list[str]]:
     return (len(failures) == 0, failures)
+
+
+# --- Per-record validators (used by oracle contracts) ---
+
+_CRITERION_ID_PATTERN = re.compile(r"^[IE]C\d+$")
+
+def validate_screening_criterion(record: dict) -> tuple[bool, list[str]]:
+    """Validate a single criterion evaluation record."""
+    failures = []
+    if record.get("met") not in ("yes", "no", "unclear"):
+        failures.append(f"met: {record.get('met')!r} not in {{yes, no, unclear}}")
+    if not record.get("evidence"):
+        failures.append("evidence: empty or missing")
+    if record.get("source") not in ("abstract", "full_text"):
+        failures.append(f"source: {record.get('source')!r} not in {{abstract, full_text}}")
+    cid = record.get("criterion_id", "")
+    if not _CRITERION_ID_PATTERN.match(cid):
+        failures.append(f"criterion_id: {cid!r} does not match [IE]C\\d+")
+    if record.get("criterion_type") not in ("inclusion", "exclusion"):
+        failures.append(f"criterion_type: {record.get('criterion_type')!r} not in {{inclusion, exclusion}}")
+    return _result(failures)
 
 
 # ============================================================
