@@ -282,3 +282,97 @@ def test_concept_id_with_uppercase_fails():
               "frequency": 1}
     ok, failures = validate_concept_record(record)
     assert ok is False
+
+
+from lib.oracle_contracts import (
+    OracleContract,
+    SCREEN_CRITERION,
+    SCREEN_DECISION,
+    EXTRACT_FIELD,
+    IDENTIFY_CONCEPTS,
+    validate_and_recover,
+)
+
+
+def test_contract_registry_names():
+    assert SCREEN_CRITERION.contract_id == "SCREEN_CRITERION"
+    assert SCREEN_DECISION.contract_id == "SCREEN_DECISION"
+    assert EXTRACT_FIELD.contract_id == "EXTRACT_FIELD"
+    assert IDENTIFY_CONCEPTS.contract_id == "IDENTIFY_CONCEPTS"
+
+
+def test_validate_and_recover_pass():
+    record = {
+        "criterion_id": "IC1", "criterion_type": "inclusion",
+        "met": "yes", "evidence": "The abstract states formal verification.",
+        "source": "abstract",
+    }
+    result = validate_and_recover(record, SCREEN_CRITERION)
+    assert result["validation"]["satisfied"] is True
+    assert result["validation"]["recovery_applied"] is False
+    assert result["record"]["_validated_by"]["contract_id"] == "SCREEN_CRITERION"
+    assert result["record"]["_validated_by"]["satisfied"] is True
+
+
+def test_validate_and_recover_fail_with_recovery():
+    record = {
+        "criterion_id": "IC1", "criterion_type": "inclusion",
+        "met": "maybe",  # invalid
+        "evidence": "some text", "source": "abstract",
+    }
+    result = validate_and_recover(record, SCREEN_CRITERION)
+    recovered = result["record"]
+    assert recovered["met"] == "unclear"
+    assert "validation_failed" in recovered["evidence"]
+    assert recovered["recovery_applied"] is True
+    assert result["validation"]["satisfied"] is False
+    assert result["validation"]["recovery_applied"] is True
+
+
+def test_provenance_metadata_on_record():
+    record = {
+        "criterion_id": "IC1", "criterion_type": "inclusion",
+        "met": "yes", "evidence": "text", "source": "abstract",
+    }
+    result = validate_and_recover(record, SCREEN_CRITERION)
+    prov = result["record"]["_validated_by"]
+    assert prov["contract_id"] == "SCREEN_CRITERION"
+    assert "timestamp" in prov
+    assert isinstance(prov["satisfied"], bool)
+
+
+def test_screen_decision_recovery_excludes():
+    record = {
+        "decision": "include",
+        "criteria_evaluations": [
+            {"criterion_id": "IC1", "criterion_type": "inclusion",
+             "met": "yes", "evidence": "text", "source": "abstract"},
+            {"criterion_id": "EC1", "criterion_type": "exclusion",
+             "met": "yes", "evidence": "text", "source": "abstract"},
+        ],
+        "reasoning": "Included despite EC.",
+    }
+    result = validate_and_recover(record, SCREEN_DECISION)
+    assert result["validation"]["satisfied"] is False
+    assert result["record"]["decision"] == "exclude"
+    assert "decision_rule_violation" in result["record"]["reasoning"]
+
+
+def test_extract_field_default_parent_source():
+    """EXTRACT_FIELD has validator_kwargs default for parent_source."""
+    record = {"field_name": "methodology", "value": "RCT",
+              "confidence": "high", "source_location": "Section 3"}
+    result = validate_and_recover(record, EXTRACT_FIELD)
+    # Default parent_source is full_text, so high confidence is allowed
+    assert result["validation"]["satisfied"] is True
+
+
+def test_extract_field_override_parent_source():
+    """Caller can override parent_source."""
+    record = {"field_name": "methodology", "value": "RCT",
+              "confidence": "high", "source_location": "abstract"}
+    result = validate_and_recover(record, EXTRACT_FIELD, parent_source="abstract")
+    assert result["validation"]["satisfied"] is False
+    recovered = result["record"]
+    assert recovered["value"] == "extraction_failed"
+    assert recovered["confidence"] == "low"
