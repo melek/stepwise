@@ -41,6 +41,57 @@ def validate_screening_criterion(record: dict) -> tuple[bool, list[str]]:
     return _result(failures)
 
 
+def validate_screening_decision(record: dict) -> tuple[bool, list[str]]:
+    """Validate a complete screening decision record (biconditional rules).
+
+    Composes over validate_screening_criterion for each evaluation.
+    """
+    failures = []
+    decision = record.get("decision")
+    if decision not in ("include", "exclude", "flag_for_full_text"):
+        failures.append(f"decision: {decision!r} not in {{include, exclude, flag_for_full_text}}")
+        return _result(failures)
+
+    evals = record.get("criteria_evaluations", [])
+    if not evals:
+        failures.append("criteria_evaluations: empty or missing")
+    if not record.get("reasoning"):
+        failures.append("reasoning: empty or missing")
+    if failures:
+        return _result(failures)
+
+    # Validate each constituent criterion record (composition)
+    for i, ev in enumerate(evals):
+        ok, ev_failures = validate_screening_criterion(ev)
+        for ef in ev_failures:
+            failures.append(f"criteria_evaluations[{i}]: {ef}")
+    if failures:
+        return _result(failures)
+
+    ic_mets = [e["met"] for e in evals if e.get("criterion_type") == "inclusion"]
+    ec_mets = [e["met"] for e in evals if e.get("criterion_type") == "exclusion"]
+    all_ic_yes = all(m == "yes" for m in ic_mets)
+    any_ec_yes = any(m == "yes" for m in ec_mets)
+    any_ic_no = any(m == "no" for m in ic_mets)
+    any_unclear = any(e["met"] == "unclear" for e in evals)
+
+    if decision == "include":
+        if not all_ic_yes:
+            failures.append("Decision rule violation: include but not all IC met=yes")
+        if any_ec_yes:
+            failures.append("Decision rule violation: include but EC met=yes")
+    elif decision == "exclude":
+        if not (any_ec_yes or any_ic_no):
+            failures.append("Decision rule violation: exclude but all IC met and no EC met")
+    elif decision == "flag_for_full_text":
+        if not any_unclear:
+            failures.append("Decision rule violation: flag_for_full_text but no criterion unclear")
+        if any_ec_yes:
+            failures.append("Decision rule violation: flag_for_full_text but EC met=yes")
+
+    return _result(failures)
+
+
 # ============================================================
 # Phase 1 — Search
 # ============================================================
