@@ -429,3 +429,48 @@ def test_low_completeness_with_qualification_passes():
     extraction_completeness = {"baddata2024": 0.3}
     ok, failures = validate_synthesis_claims(paragraphs, included_keys, extraction_completeness)
     assert ok is True
+
+
+from lib.postconditions import check_citation_grounding
+
+
+def test_grounded_citation_passes():
+    review_citations = {
+        "dijkstra1968": "Formal verification improves software reliability",
+    }
+    extractions = [
+        {"paper_id": "dijkstra1968", "fields": [
+            {"field_name": "key_finding", "value": "formal verification improves reliability"},
+        ]},
+    ]
+    ok, failures = check_citation_grounding(review_citations, extractions)
+    assert ok is True
+
+
+def test_ungrounded_citation_flagged():
+    review_citations = {
+        "dijkstra1968": "Machine learning models achieve 99% accuracy",
+    }
+    extractions = [
+        {"paper_id": "dijkstra1968", "fields": [
+            {"field_name": "key_finding", "value": "formal verification improves reliability"},
+        ]},
+    ]
+    ok, failures = check_citation_grounding(review_citations, extractions)
+    assert ok is False
+    assert any("dijkstra1968" in f for f in failures)
+
+
+def test_missing_extraction_flagged():
+    review_citations = {
+        "ghost2099": "This paper shows great results",
+    }
+    extractions = []
+    ok, failures = check_citation_grounding(review_citations, extractions)
+    assert ok is False
+    assert any("ghost2099" in f for f in failures)
+
+
+def test_empty_citations_passes():
+    ok, failures = check_citation_grounding({}, [])
+    assert ok is True

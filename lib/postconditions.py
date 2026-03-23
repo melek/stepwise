@@ -166,6 +166,49 @@ def validate_synthesis_claims(
     return _result(failures)
 
 
+def check_citation_grounding(
+    review_citations: dict[str, str],
+    extractions: list[dict],
+    min_overlap: int = 2,
+) -> tuple[bool, list[str]]:
+    """Check that cited papers' extraction data supports the claim sentence.
+
+    Advisory check: flags potentially ungrounded citations.
+    review_citations: {bibtex_key: surrounding_sentence}
+    extractions: list of extraction records with paper_id and fields
+    min_overlap: minimum keyword overlap count to consider grounded
+    """
+    failures = []
+    extraction_map = {e["paper_id"]: e for e in extractions if "paper_id" in e}
+
+    for key, claim_sentence in review_citations.items():
+        if key not in extraction_map:
+            failures.append(f"[@{key}]: no extraction record found — cannot verify grounding")
+            continue
+
+        ext = extraction_map[key]
+        extracted_text = " ".join(
+            f.get("value", "") for f in ext.get("fields", [])
+            if f.get("value") and f.get("value") != "extraction_failed"
+        ).lower()
+
+        if not extracted_text:
+            failures.append(f"[@{key}]: all extraction fields failed — cannot verify grounding")
+            continue
+
+        claim_words = set(re.findall(r"[a-z]{3,}", claim_sentence.lower()))
+        extract_words = set(re.findall(r"[a-z]{3,}", extracted_text))
+        overlap = claim_words & extract_words
+
+        if len(overlap) < min_overlap:
+            failures.append(
+                f"[@{key}]: low keyword overlap ({len(overlap)} words) between claim and extraction — "
+                f"potentially ungrounded citation"
+            )
+
+    return _result(failures)
+
+
 # ============================================================
 # Phase 1 — Search
 # ============================================================
