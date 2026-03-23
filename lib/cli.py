@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
 
+from . import export as exp
 from . import metrics as m
 from . import oracle_contracts as oc
 from . import postconditions as pc
@@ -478,6 +479,36 @@ def cmd_preprocess(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_export(args: argparse.Namespace) -> None:
+    workspace = Path(args.workspace).expanduser()
+    data = load_workspace_data(workspace)
+
+    dataset_map = {
+        "candidates": data["candidates"],
+        "included": data["included"],
+        "extractions": data["extractions"],
+    }
+    records = dataset_map.get(args.dataset, [])
+
+    if args.format == "ris":
+        output = exp.to_ris(records)
+    elif args.format == "csv":
+        default_fields = {
+            "candidates": ["id", "title", "authors", "year", "venue", "doi", "source"],
+            "included": ["id", "title", "authors", "year", "venue", "doi", "source"],
+            "extractions": ["paper_id", "source", "timestamp"],
+        }
+        fields = default_fields.get(args.dataset, ["id", "title"])
+        output = exp.to_csv(records, fields)
+
+    output_path = workspace / f"exports/{args.dataset}.{args.format}"
+    output_path.parent.mkdir(exist_ok=True)
+    output_path.write_text(output)
+    json.dump({"written": str(output_path), "records": len(records), "format": args.format},
+              sys.stdout, indent=2)
+    print()
+
+
 def cmd_prisma(args: argparse.Namespace) -> None:
     workspace = Path(args.workspace).expanduser()
     data = load_workspace_data(workspace)
@@ -554,6 +585,12 @@ def main() -> None:
     p_prisma.add_argument("--type", required=True, choices=["prisma2020", "traice"])
     p_prisma.add_argument("--workspace", required=True)
 
+    # export
+    p_exp = sub.add_parser("export", help="Export data to RIS or CSV format")
+    p_exp.add_argument("--format", required=True, choices=["ris", "csv"])
+    p_exp.add_argument("--dataset", required=True, choices=["candidates", "included", "extractions"])
+    p_exp.add_argument("--workspace", required=True)
+
     args = parser.parse_args()
     handlers = {
         "metrics": cmd_metrics,
@@ -564,6 +601,7 @@ def main() -> None:
         "validate-inference": cmd_validate_inference,
         "preprocess": cmd_preprocess,
         "prisma": cmd_prisma,
+        "export": cmd_export,
     }
     handlers[args.command](args)
 
