@@ -27,6 +27,8 @@ from pathlib import Path
 from . import metrics as m
 from . import oracle_contracts as oc
 from . import postconditions as pc
+from . import preprocess as prep
+from . import prisma as pr
 from . import saturation as sat
 from . import section_parser as sp
 from . import state as st
@@ -426,6 +428,76 @@ def cmd_validate_inference(args: argparse.Namespace) -> None:
     print()
 
 
+def _parse_protocol_criteria(workspace: Path) -> list[dict]:
+    """Extract inclusion/exclusion criteria with testable conditions from protocol.md."""
+    protocol_path = workspace / "protocol.md"
+    if not protocol_path.exists():
+        return []
+    text = protocol_path.read_text()
+    criteria = []
+    # Match table rows: | IC1/EC1 | description | testable condition |
+    for match in re.finditer(
+        r"\|\s*([IE]C\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|", text
+    ):
+        criteria.append({
+            "criterion_id": match.group(1).strip(),
+            "description": match.group(2).strip(),
+            "testable_condition": match.group(3).strip(),
+        })
+    return criteria
+
+
+def cmd_preprocess(args: argparse.Namespace) -> None:
+    workspace = Path(args.workspace).expanduser()
+    data = load_workspace_data(workspace)
+
+    if args.type == "screening":
+        # Parse criteria from protocol.md
+        criteria = _parse_protocol_criteria(workspace)
+        results = []
+        for candidate in data["candidates"]:
+            result = prep.preprocess_for_screening(
+                candidate.get("abstract", ""),
+                candidate.get("title", ""),
+                criteria,
+            )
+            results.extend(result)
+        output_path = workspace / "data" / "preprocessed-screening.jsonl"
+        with open(output_path, "w") as f:
+            for r in results:
+                f.write(json.dumps(r) + "\n")
+        json.dump({"written": str(output_path), "records": len(results)}, sys.stdout, indent=2)
+
+    elif args.type == "synthesis":
+        result = prep.preprocess_for_synthesis(data["extractions"], data["concepts"])
+        output_path = workspace / "data" / "preprocessed-synthesis.json"
+        with open(output_path, "w") as f:
+            json.dump(result, f, indent=2)
+        json.dump({"written": str(output_path), "themes": len(result.get("themes", []))}, sys.stdout, indent=2)
+
+    print()
+
+
+def cmd_prisma(args: argparse.Namespace) -> None:
+    workspace = Path(args.workspace).expanduser()
+    data = load_workspace_data(workspace)
+    review_path = workspace / "review.md"
+    review_text = review_path.read_text() if review_path.exists() else ""
+    protocol = {}
+
+    if args.type == "prisma2020":
+        items = pr.check_prisma_compliance(review_text, data, protocol)
+    elif args.type == "traice":
+        items = pr.check_prisma_traice_compliance(review_text, data)
+    else:
+        print(json.dumps({"error": f"Unknown type: {args.type}"}))
+        sys.exit(1)
+        return
+
+    json.dump(items, sys.stdout, indent=2)
+    print()
+
+
 # --- Argument parser ---
 
 def main() -> None:
@@ -472,6 +544,16 @@ def main() -> None:
     p_val.add_argument("--file", help="Path to JSON file containing record")
     p_val.add_argument("--parent-source", help="Parent extraction source (for EXTRACT_FIELD)")
 
+    # preprocess
+    p_prep = sub.add_parser("preprocess", help="Run deterministic preprocessing")
+    p_prep.add_argument("--type", required=True, choices=["screening", "synthesis"])
+    p_prep.add_argument("--workspace", required=True)
+
+    # prisma
+    p_prisma = sub.add_parser("prisma", help="Check PRISMA compliance")
+    p_prisma.add_argument("--type", required=True, choices=["prisma2020", "traice"])
+    p_prisma.add_argument("--workspace", required=True)
+
     args = parser.parse_args()
     handlers = {
         "metrics": cmd_metrics,
@@ -480,6 +562,8 @@ def main() -> None:
         "saturation": cmd_saturation,
         "parse-sections": cmd_parse_sections,
         "validate-inference": cmd_validate_inference,
+        "preprocess": cmd_preprocess,
+        "prisma": cmd_prisma,
     }
     handlers[args.command](args)
 
