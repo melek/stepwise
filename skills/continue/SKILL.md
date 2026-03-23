@@ -43,8 +43,10 @@ The orchestration loop is identical to the one in the research skill. For the cu
    - Phase 3: runbooks/snowball.md
    - Phase 4: runbooks/extract.md
    - Phase 5: runbooks/synthesize.md
-4. Agent dispatch prompt format:
-   "You are a {phase_name} agent. Read and follow the runbook at {plugin_dir}/runbooks/{runbook}.md exactly. Workspace: {workspace_path}. Protocol: {workspace_path}/protocol.md"
+4. Agent dispatch prompt format: Use the exact dispatch prompts from the research skill (Section 4.1), including preprocessed data paths for Phase 2 and Phase 5 agents. The orchestrator runs preprocessing at the same transition points:
+   - Phase 1 → 2 transition: `python3 {PLUGIN_DIR}/lib/cli.py preprocess --type screening --workspace {WORKSPACE}`
+   - Phase 4 → 5 transition: `python3 {PLUGIN_DIR}/lib/cli.py preprocess --type synthesis --workspace {WORKSPACE}`
+   If resuming mid-phase (status was `in_progress`), check whether preprocessed files already exist before re-running.
 5. On completion: run postcondition checks per runbooks/postconditions.md
 6. On pass: update metrics, log transition, advance phase
 7. On fail: retry once, then record failure and terminate
