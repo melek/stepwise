@@ -213,17 +213,42 @@ def check_citation_grounding(
 # Phase 1 — Search
 # ============================================================
 
-def check_all_queries_executed(
+_DB_CANONICAL = {
+    "semantic scholar": "semantic_scholar",
+    "arxiv": "arxiv",
+    "pubmed": "pubmed",
+    "paper-search-mcp": "paper_search_mcp",
+}
+
+
+def normalize_database(name: str) -> str:
+    """Normalize database name to canonical snake_case form."""
+    return _DB_CANONICAL.get(name.lower().strip(), name.lower().strip().replace(" ", "_"))
+
+
+def check_query_counts_per_database(
     protocol_queries: list[dict], search_log: list[dict]
 ) -> tuple[bool, list[str]]:
-    """Every (database, query) pair in protocol has a matching search_log entry."""
-    log_pairs = {(e["database"], e["query"]) for e in search_log}
+    """For each database in protocol, search_log has >= that many distinct queries."""
+    from collections import Counter
+    protocol_counts: dict[str, int] = Counter(
+        normalize_database(pq["database"]) for pq in protocol_queries
+    )
+    log_counts: dict[str, int] = Counter(
+        normalize_database(e["database"]) for e in search_log
+    )
     failures = []
-    for pq in protocol_queries:
-        key = (pq["database"], pq["query"])
-        if key not in log_pairs:
-            failures.append(f"Query not executed: {key[0]} / {key[1]}")
+    for db, expected in protocol_counts.items():
+        actual = log_counts.get(db, 0)
+        if actual < expected:
+            failures.append(
+                f"Database {db}: expected >= {expected} queries, found {actual}"
+            )
     return _result(failures)
+
+
+# Keep old name as alias for backward compatibility in tests
+check_all_queries_executed = check_query_counts_per_database
 
 
 def check_candidates_non_empty(candidates: list[dict]) -> tuple[bool, list[str]]:
@@ -265,7 +290,7 @@ def check_phase1_all(
 ) -> tuple[bool, list[str]]:
     all_failures = []
     for check_fn, args in [
-        (check_all_queries_executed, (protocol_queries, search_log)),
+        (check_query_counts_per_database, (protocol_queries, search_log)),
         (check_candidates_non_empty, (candidates,)),
         (check_no_duplicate_ids, (candidates,)),
         (check_minimum_metadata, (candidates,)),

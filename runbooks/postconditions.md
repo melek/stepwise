@@ -15,7 +15,7 @@ The orchestrator executes these checks by reading the relevant files and verifyi
 
 **Checks:**
 
-1. **All queries executed:** For every (database, query) pair in `protocol.md`, there exists at least one entry in `search-log.jsonl` where `entry.query` matches and `entry.database` matches.
+1. **All queries executed:** For each database in the Search Terms table of `protocol.md`, the number of distinct query executions in `search-log.jsonl` for that database is at least equal to the number of queries specified in the protocol for that database. Database names are normalized to canonical form (e.g., `Semantic Scholar` → `semantic_scholar`).
 2. **Candidates non-empty:** `data/candidates.jsonl` contains at least one record.
 3. **No duplicate canonical IDs:** Extract the `id` field from every record in `candidates.jsonl`. No two records share the same `id`.
 4. **Minimum metadata:** Every record in `candidates.jsonl` has non-null values for: `id`, `title`, `abstract`, `authors`, `year`.

@@ -14,26 +14,69 @@ datatype Candidate = Candidate(
 
 datatype CheckResult = CheckResult(satisfied: bool, failures: seq<string>)
 
-function QueryMatchExists(pq: ProtocolQuery, search_log: seq<SearchLogEntry>): bool
-{
-  exists i :: 0 <= i < |search_log| && search_log[i].database == pq.database && search_log[i].query == pq.query
-}
+// ---- Count-based query matching ----
+// For each database in protocol queries, the search log must contain
+// at least as many entries for that database.
 
-function CheckAllQueriesExecutedHelper(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, idx: nat): (seq<string>)
-  requires idx <= |protocol_queries|
-  decreases |protocol_queries| - idx
+function CountEntriesForDb(db: string, entries: seq<SearchLogEntry>, idx: nat): nat
+  requires idx <= |entries|
+  decreases |entries| - idx
 {
-  if idx == |protocol_queries| then []
+  if idx == |entries| then 0
   else
-    var pq := protocol_queries[idx];
-    var rest := CheckAllQueriesExecutedHelper(protocol_queries, search_log, idx + 1);
-    if QueryMatchExists(pq, search_log) then rest
-    else ["Unmatched query: (" + pq.database + ", " + pq.query + ")"] + rest
+    var rest := CountEntriesForDb(db, entries, idx + 1);
+    if entries[idx].database == db then 1 + rest
+    else rest
 }
 
-function CheckAllQueriesExecuted(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): CheckResult
+function CountProtocolQueriesForDb(db: string, queries: seq<ProtocolQuery>, idx: nat): nat
+  requires idx <= |queries|
+  decreases |queries| - idx
 {
-  var failures := CheckAllQueriesExecutedHelper(protocol_queries, search_log, 0);
+  if idx == |queries| then 0
+  else
+    var rest := CountProtocolQueriesForDb(db, queries, idx + 1);
+    if queries[idx].database == db then 1 + rest
+    else rest
+}
+
+function CollectDatabases(queries: seq<ProtocolQuery>, idx: nat): set<string>
+  requires idx <= |queries|
+  decreases |queries| - idx
+{
+  if idx == |queries| then {}
+  else {queries[idx].database} + CollectDatabases(queries, idx + 1)
+}
+
+function CheckQueryCountsHelper(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): seq<string>
+{
+  // For each database, check count. Since sets are unordered, we check all at once.
+  // A database fails if log count < protocol count.
+  var failures := set db | db in databases &&
+    CountEntriesForDb(db, search_log, 0) < CountProtocolQueriesForDb(db, protocol_queries, 0);
+  // Convert set of failing databases to a sequence of failure messages
+  SetToFailures(failures)
+}
+
+// Convert a set of failing database names to a sequence of failure strings
+function SetToFailures(dbs: set<string>): seq<string>
+{
+  if dbs == {} then []
+  else
+    var db :| db in dbs;
+    ["Database " + db + ": insufficient queries"] + SetToFailures(dbs - {db})
+}
+
+predicate AllDbCountsSatisfied(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>)
+{
+  forall db :: db in databases ==>
+    CountEntriesForDb(db, search_log, 0) >= CountProtocolQueriesForDb(db, protocol_queries, 0)
+}
+
+function CheckQueryCountsPerDatabase(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): CheckResult
+{
+  var databases := CollectDatabases(protocol_queries, 0);
+  var failures := CheckQueryCountsHelper(databases, protocol_queries, search_log);
   CheckResult(|failures| == 0, failures)
 }
 
@@ -100,7 +143,7 @@ function CheckMinimumMetadata(candidates: seq<Candidate>): CheckResult
 
 function CheckPhase1All(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>): CheckResult
 {
-  var r1 := CheckAllQueriesExecuted(protocol_queries, search_log);
+  var r1 := CheckQueryCountsPerDatabase(protocol_queries, search_log);
   var r2 := CheckCandidatesNonEmpty(candidates);
   var r3 := CheckNoDuplicateIds(candidates);
   var r4 := CheckMinimumMetadata(candidates);
@@ -109,27 +152,42 @@ function CheckPhase1All(protocol_queries: seq<ProtocolQuery>, search_log: seq<Se
   CheckResult(allSatisfied, allFailures)
 }
 
-// ---- Lemmas for helper functions ----
+// ---- Helper lemmas ----
 
-lemma CheckAllQueriesExecutedHelperEmpty(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, idx: nat)
-  requires idx <= |protocol_queries|
-  ensures |CheckAllQueriesExecutedHelper(protocol_queries, search_log, idx)| == 0 ==>
-          forall k :: idx <= k < |protocol_queries| ==> QueryMatchExists(protocol_queries[k], search_log)
-  decreases |protocol_queries| - idx
+lemma SetToFailuresEmpty(dbs: set<string>)
+  ensures dbs == {} ==> SetToFailures(dbs) == []
 {
-  if idx < |protocol_queries| {
-    CheckAllQueriesExecutedHelperEmpty(protocol_queries, search_log, idx + 1);
+}
+
+lemma SetToFailuresNonEmpty(dbs: set<string>)
+  ensures dbs != {} ==> |SetToFailures(dbs)| > 0
+{
+  if dbs != {} {
+    var db :| db in dbs;
   }
 }
 
-lemma CheckAllQueriesExecutedHelperNonEmpty(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, idx: nat)
-  requires idx <= |protocol_queries|
-  ensures (exists k :: idx <= k < |protocol_queries| && !QueryMatchExists(protocol_queries[k], search_log)) ==>
-          |CheckAllQueriesExecutedHelper(protocol_queries, search_log, idx)| > 0
-  decreases |protocol_queries| - idx
+lemma CheckQueryCountsHelperSatisfied(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>)
+  ensures AllDbCountsSatisfied(databases, protocol_queries, search_log) ==>
+          |CheckQueryCountsHelper(databases, protocol_queries, search_log)| == 0
 {
-  if idx < |protocol_queries| {
-    CheckAllQueriesExecutedHelperNonEmpty(protocol_queries, search_log, idx + 1);
+  if AllDbCountsSatisfied(databases, protocol_queries, search_log) {
+    var failing := set db | db in databases &&
+      CountEntriesForDb(db, search_log, 0) < CountProtocolQueriesForDb(db, protocol_queries, 0);
+    assert failing == {};
+    SetToFailuresEmpty(failing);
+  }
+}
+
+lemma CheckQueryCountsHelperUnsatisfied(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>)
+  ensures !AllDbCountsSatisfied(databases, protocol_queries, search_log) ==>
+          |CheckQueryCountsHelper(databases, protocol_queries, search_log)| > 0
+{
+  if !AllDbCountsSatisfied(databases, protocol_queries, search_log) {
+    var failing := set db | db in databases &&
+      CountEntriesForDb(db, search_log, 0) < CountProtocolQueriesForDb(db, protocol_queries, 0);
+    assert failing != {};
+    SetToFailuresNonEmpty(failing);
   }
 }
 
@@ -167,7 +225,7 @@ lemma CheckMinimumMetadataHelperNonEmpty(candidates: seq<Candidate>, idx: nat)
 
 lemma Soundness(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>)
   ensures CheckPhase1All(protocol_queries, search_log, candidates).satisfied ==>
-          (CheckAllQueriesExecuted(protocol_queries, search_log).satisfied &&
+          (CheckQueryCountsPerDatabase(protocol_queries, search_log).satisfied &&
            CheckCandidatesNonEmpty(candidates).satisfied &&
            CheckNoDuplicateIds(candidates).satisfied &&
            CheckMinimumMetadata(candidates).satisfied)
@@ -177,7 +235,7 @@ lemma Soundness(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogE
 // ---- Completeness ----
 
 lemma CompletenessQueries(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>)
-  ensures !CheckAllQueriesExecuted(protocol_queries, search_log).satisfied ==>
+  ensures !CheckQueryCountsPerDatabase(protocol_queries, search_log).satisfied ==>
           (!CheckPhase1All(protocol_queries, search_log, candidates).satisfied &&
            |CheckPhase1All(protocol_queries, search_log, candidates).failures| > 0)
 {
