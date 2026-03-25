@@ -178,19 +178,54 @@ def parse_protocol_questions(workspace: Path) -> list[str]:
 
 
 def parse_protocol_queries(workspace: Path) -> list[dict]:
-    """Extract (database, query) pairs from protocol.md search terms table."""
+    """Extract (database, query) pairs from protocol.md Search Terms table.
+
+    Scoped to the ### Search Terms section only.  Normalizes database names
+    to snake_case and strips backtick formatting and trailing category
+    annotations from query text.
+    """
     protocol_path = workspace / "protocol.md"
     if not protocol_path.exists():
         return []
     text = protocol_path.read_text()
+
+    # Scope to Search Terms section (same pattern as count_appendix_a_rows)
+    section_match = re.search(
+        r"(?:^|\n)###\s+Search Terms\s*\n", text
+    )
+    if not section_match:
+        return []
+    section_start = section_match.end()
+    next_section = re.search(r"\n#{1,3}\s+", text[section_start:])
+    section_end = section_start + next_section.start() if next_section else len(text)
+    section_text = text[section_start:section_end]
+
     queries = []
-    # Match table rows with database | query pattern
-    for match in re.finditer(r"\|\s*(\w[\w\s]*?)\s*\|\s*(.+?)\s*\|", text):
+    for match in re.finditer(r"\|\s*(\w[\w\s]*?)\s*\|\s*(.+?)\s*\|", section_text):
         db = match.group(1).strip()
         query = match.group(2).strip()
-        if db.lower() not in ("database", "---", ""):
-            queries.append({"database": db, "query": query})
+        if db.lower() in ("database", "---", ""):
+            continue
+        # Strip backticks and trailing category annotations like (cs.SE, cs.FL)
+        query = re.sub(r"^`|`$", "", query)
+        query = re.sub(r"`\s*\([^)]*\)\s*$", "", query).strip()
+        # Normalize database name
+        db = _normalize_database(db)
+        queries.append({"database": db, "query": query})
     return queries
+
+
+_DB_CANONICAL = {
+    "semantic scholar": "semantic_scholar",
+    "arxiv": "arxiv",
+    "pubmed": "pubmed",
+    "paper-search-mcp": "paper_search_mcp",
+}
+
+
+def _normalize_database(name: str) -> str:
+    """Normalize database name to canonical snake_case form."""
+    return _DB_CANONICAL.get(name.lower().strip(), name.lower().strip().replace(" ", "_"))
 
 
 # --- Command handlers ---
