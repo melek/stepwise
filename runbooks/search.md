@@ -58,6 +58,8 @@ After each query, append to `logs/search-log.jsonl`:
 {"query": "{query}", "database": "{database}", "timestamp": "{ISO-8601}", "result_count": {N}, "parameters": {"limit": {N}, "year_range": "{start}-{end}"}}
 ```
 
+Database names MUST use canonical form: `semantic_scholar`, `arxiv`, `pubmed`, `paper_search_mcp`.
+
 ### Step 3: Build Candidate Records
 For each result, construct a candidate record:
 ```json
