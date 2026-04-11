@@ -97,6 +97,29 @@ def test_check_query_counts_empty_protocol():
     assert satisfied is True
 
 
+def test_check_query_counts_skips_event_entries():
+    """Event entries (e.g., unpaywall_unavailable) lack database key and must not crash."""
+    protocol = [{"database": "semantic_scholar", "query": "q1"}]
+    log = [
+        {"timestamp": "2026-04-10T04:29:00Z", "event": "unpaywall_unavailable", "phase": 1, "details": {"reason": "MCP not configured"}},
+        {"timestamp": "2026-04-10T04:29:00Z", "event": "paper_search_unavailable", "phase": 1, "details": {"reason": "MCP not configured"}},
+        {"database": "semantic_scholar", "query": "q1"},
+    ]
+    satisfied, failures = check_query_counts_per_database(protocol, log)
+    assert satisfied is True
+    assert failures == []
+
+
+def test_check_query_counts_all_events_no_queries():
+    """Log with only event entries and no actual queries should report deficit."""
+    protocol = [{"database": "semantic_scholar", "query": "q1"}]
+    log = [
+        {"event": "pubmed_unavailable", "phase": 1},
+    ]
+    satisfied, failures = check_query_counts_per_database(protocol, log)
+    assert satisfied is False
+
+
 def test_check_phase1_all_integration():
     """End-to-end: protocol queries + search log + candidates."""
     protocol_queries = [
