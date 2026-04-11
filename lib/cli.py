@@ -94,8 +94,15 @@ def parse_review_citations(workspace: Path) -> set[str]:
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     # Remove inline code
     text = re.sub(r"`[^`]+`", "", text)
-    # Find citation keys
-    return set(re.findall(r"\[@([^\]]+)\]", text))
+    # Find citation keys, splitting multi-citations like [@key1; @key2]
+    raw_matches = re.findall(r"\[@([^\]]+)\]", text)
+    keys: set[str] = set()
+    for match in raw_matches:
+        for part in re.split(r";\s*@?", match):
+            part = part.strip()
+            if part:
+                keys.add(part)
+    return keys
 
 
 def parse_review_headers(workspace: Path) -> set[str]:
