@@ -235,7 +235,9 @@ def check_query_counts_per_database(
         normalize_database(pq["database"]) for pq in protocol_queries
     )
     log_counts: dict[str, int] = Counter(
-        normalize_database(e["database"]) for e in search_log
+        normalize_database(e["database"])
+        for e in search_log
+        if "database" in e
     )
     failures = []
     for db, expected in protocol_counts.items():
