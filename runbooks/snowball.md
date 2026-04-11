@@ -59,7 +59,24 @@ Papers in included.jsonl that are NOT in the already-snowballed set.
      Append to snowball-log.jsonl and skip.
 
    - If new paper:
-     a. Fetch metadata (title, abstract, authors, year, venue)
+     a. **Fetch full metadata** (REQUIRED — do not use citation list data alone):
+        Call `mcp__semantic-scholar__get_paper` with the paper's S2 ID and
+        `fields=title,abstract,authors,year,venue,externalIds,citationCount`.
+        Populate ALL candidate record fields from the response:
+        - `title` — paper title
+        - `abstract` — full abstract text
+        - `authors` — list of author name strings (e.g., `["Alice Smith", "Bob Jones"]`)
+        - `year` — publication year
+        - `venue` — journal or conference name
+        - `doi` — from externalIds.DOI if present
+        - `arxiv_id` — from externalIds.ArXiv if present
+        - `s2_id` — the Semantic Scholar paper ID
+        - `citation_count` — from citationCount
+
+        If the API returns an empty or null authors list, set authors to
+        `["[metadata unavailable]"]` rather than `[]`. This ensures downstream
+        postcondition checks (`check_minimum_metadata`) can distinguish between
+        "not fetched" and "genuinely authorless."
      b. Construct candidate record (same schema as search agent)
      c. Set `source` = `snowball_backward` or `snowball_forward`
      d. Set `discovered_from_paper` = seed paper ID

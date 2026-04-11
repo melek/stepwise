@@ -146,16 +146,21 @@ Example: Primary question "How do transformer architectures affect NLP performan
 2. How does model scale interact with architectural choices in transformer NLP systems?
 3. What are the documented failure modes of transformer-based NLP models?
 
-**Field 2: Search Terms and Boolean Queries**
+**Field 2: Search Terms and Queries**
 
-For each target database (Semantic Scholar, arXiv), generate Boolean query strings:
+For each target database, generate appropriately formatted query strings:
 - Identify the core concepts from the research question
 - Generate synonyms and related terms for each concept
-- Construct Boolean queries using AND/OR/NOT operators
+- Construct queries appropriate to each database's syntax (see below)
 - Suggest 2–4 query variants per database to maximize recall
 - Format: present a table with database and query string columns
 
-Note: Semantic Scholar supports fielded search. arXiv supports category filters (e.g., `cs.AI`, `cs.CL`). Suggest appropriate constraints.
+**Database query syntax:**
+- **PubMed:** Supports full Boolean syntax (AND, OR, NOT), quoted phrases, MeSH terms, and field tags
+- **Semantic Scholar:** Plain-text keyword queries only — no Boolean operators or quoted phrases. Use API parameters (`fieldsOfStudy`, `year`, `venue`) for filtering
+- **arXiv:** Supports Boolean operators (AND, OR, ANDNOT), quoted phrases, and field-specific prefixes (ti:, au:, abs:). Category filters (e.g., `cs.AI`, `cs.CL`) improve relevance
+
+When generating query strings, format them appropriately for each database rather than using a single Boolean query across all databases.
 
 **Field 3: Inclusion Criteria**
 
