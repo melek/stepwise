@@ -9,7 +9,7 @@
       "name": "stepwise",
       "source": "./",
       "description": "Autonomous systematic literature review with verified inference quarantine, PRISMA compliance, and multi-database search",
-      "version": "0.2.0"
+      "version": "0.2.2"
     }
   ]
 }
