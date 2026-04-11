@@ -24,6 +24,14 @@ Read `{workspace}/protocol.md`. Extract:
 For each (database, query) pair:
 
 **Semantic Scholar:**
+
+**Query syntax note:** Semantic Scholar's search endpoint accepts plain-text
+keyword queries only. Boolean operators (AND, OR, NOT) and quoted phrases are
+NOT supported — they will be treated as literal search terms. If the protocol
+specifies Boolean queries for Semantic Scholar, convert them to space-separated
+keywords before executing. Use the `fieldsOfStudy`, `year`, and `venue` API
+parameters for structured filtering instead of query-level Boolean logic.
+
 - Use `mcp__semantic-scholar__search_paper` with the query string
 - Parameters: query={query}, limit={max_results_per_query}, year={start}-{end}
 - Record each result's: paperId, title, abstract, authors, year, venue, citationCount, externalIds (DOI, ArXiv)
