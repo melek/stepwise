@@ -11,7 +11,7 @@ Six sequential phases, each with defined postconditions that must pass before th
 | Phase | Name | Mode | Work |
 |-------|------|------|------|
 | 0 | Protocol Definition | Interactive | User and orchestrator collaboratively define research question, search strategy, inclusion/exclusion criteria, extraction schema, and phase bounds |
-| 1 | Search | Autonomous | Execute Boolean queries against Semantic Scholar and arXiv; collect candidate corpus |
+| 1 | Search | Autonomous | Execute queries against Semantic Scholar, arXiv, and PubMed; collect candidate corpus |
 | 2 | Screening | Autonomous | Evaluate each candidate against inclusion/exclusion criteria; produce included corpus |
 | 3 | Snowballing | Autonomous | Forward and backward citation traversal from included papers; screen new candidates; terminate on discovery saturation (`θ_d`) or max depth |
 | 4 | Extraction | Autonomous | Extract protocol-defined fields from each included paper; identify concepts; check conceptual saturation (`θ_c`) — loop back to Phase 3 if concept space is still expanding |
@@ -64,7 +64,7 @@ The state machine (phase transitions, retry bounds, status validity) and saturat
 | `spec/state.dfy` | Forward progress, no phase skipping, feedback bound, retry bound (≤1), terminal correctness, monotonic completion |
 | `spec/saturation.dfy` | Range [0,1], zero-denominator safety, termination threshold, feedback bound |
 
-Python implementations in `lib/` mirror the Dafny specs and are tested (85 tests, pytest).
+Python implementations in `lib/` mirror the Dafny specs and are tested (222 tests, pytest).
 
 ## Installation
 
