@@ -95,6 +95,11 @@ def validate_screening_decision(record: dict) -> tuple[bool, list[str]]:
 _CONCEPT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 _CITATION_PATTERN = re.compile(r"\[@([^\]]+)\]")
 
+
+def _split_citation_keys(raw_match: str) -> list[str]:
+    """Split a multi-citation match like 'key1; @key2' into individual keys."""
+    return [p.strip() for p in re.split(r";\s*@?", raw_match) if p.strip()]
+
 def validate_extraction_field(
     record: dict, parent_source: str = "full_text"
 ) -> tuple[bool, list[str]]:
@@ -147,7 +152,10 @@ def validate_synthesis_claims(
     for para in paragraphs:
         text = para.get("text", "")
         section = para.get("section", "?")
-        citations = _CITATION_PATTERN.findall(text)
+        raw_citations = _CITATION_PATTERN.findall(text)
+        citations = []
+        for raw in raw_citations:
+            citations.extend(_split_citation_keys(raw))
 
         if not citations:
             failures.append(f"Section {section}: paragraph has no citations")
