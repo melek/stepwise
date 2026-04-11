@@ -399,9 +399,24 @@ def check_termination_condition(
 
 
 def check_all_seeds_examined(
-    seed_papers: list[dict], snowball_log: list[dict]
+    seed_papers: list[dict],
+    snowball_log: list[dict],
+    max_depth: int = 0,
 ) -> tuple[bool, list[str]]:
-    """Every seed paper has forward and backward snowball entries."""
+    """Every seed paper has forward and backward snowball entries.
+
+    Papers discovered at max_depth are terminal leaves and are exempt —
+    they cannot be snowballed further without exceeding the depth cap.
+    """
+    # Build set of terminal leaves (discovered at max_depth)
+    terminal_leaves: set[str] = set()
+    if max_depth > 0:
+        terminal_leaves = {
+            e["discovered_paper_id"]
+            for e in snowball_log
+            if e.get("depth_level") == max_depth
+            and not e.get("already_known", False)
+        }
     forward_sources = {
         e["source_paper_id"] for e in snowball_log if e.get("direction") == "forward"
     }
@@ -411,6 +426,8 @@ def check_all_seeds_examined(
     failures = []
     for p in seed_papers:
         pid = p["id"]
+        if pid in terminal_leaves:
+            continue
         missing = []
         if pid not in forward_sources:
             missing.append("forward")
@@ -434,14 +451,30 @@ def check_truncation_logged(snowball_log: list[dict]) -> tuple[bool, list[str]]:
     return _result(failures)
 
 
+def _all_ids(records: list[dict]) -> set[str]:
+    """Build a set of all known ID forms for a list of paper records.
+
+    Handles canonical ID promotion (e.g., S2 hash → DOI) by collecting
+    every non-null ID field so lookups match regardless of which form
+    was recorded in the snowball log.
+    """
+    ids: set[str] = set()
+    for r in records:
+        for key in ("id", "s2_id", "doi", "arxiv_id"):
+            v = r.get(key)
+            if v:
+                ids.add(v)
+    return ids
+
+
 def check_new_inclusions_recorded(
     snowball_log: list[dict],
     included: list[dict],
     candidates: list[dict],
 ) -> tuple[bool, list[str]]:
     """Every snowball include is in both included and candidates."""
-    included_ids = {p["id"] for p in included}
-    candidate_ids = {c["id"] for c in candidates}
+    included_ids = _all_ids(included)
+    candidate_ids = _all_ids(candidates)
     failures = []
     for e in snowball_log:
         if e.get("screening_decision") == "include":
@@ -465,7 +498,7 @@ def check_phase3_all(
     all_failures = []
     for check_fn, args in [
         (check_termination_condition, (snowball_log, phase_log, max_depth, threshold)),
-        (check_all_seeds_examined, (seed_papers, snowball_log)),
+        (check_all_seeds_examined, (seed_papers, snowball_log, max_depth)),
         (check_truncation_logged, (snowball_log,)),
         (check_new_inclusions_recorded, (snowball_log, included, candidates)),
     ]:
