@@ -28,7 +28,7 @@ Resume an existing systematic literature review from its last recorded state. Th
 | 0 | in_progress | Protocol definition incomplete. Re-enter Phase 0: read protocol.md (may be partial), continue filling fields interactively with user, get approval. |
 | 1-5 | completed | Advance to next phase. Update state.json: current_phase += 1, phase_status = pending. Enter orchestration loop. |
 | 1-5 | in_progress | Phase was interrupted. **Run its postcondition checks first.** If they pass, the work finished and only the bookkeeping was lost: log `phase_complete` with `"recovered": true`, mark the phase completed, and advance. If they fail, re-run the phase. Search and snowballing skip work already on disk; screening and extraction may redo some. Enter orchestration loop. |
-| 1-5 | failed | Report failure reason from state.json. Ask user: retry this phase, or revise protocol? If retry: reset phase_status to pending, enter orchestration loop. If revise: set current_phase = 0, phase_status = in_progress. |
+| 1-5 | failed | `RECOVERY:` stop. Report the failure reason from state.json with evidence and your recommendation, then ask: retry this phase, or revise protocol? If retry: reset phase_status to pending, enter orchestration loop. If revise: set current_phase = 0, phase_status = in_progress. |
 | 1-5 | pending | Phase ready to start. Enter orchestration loop. |
 | any | needs_protocol_revision | Phase 2 screening found no papers. Report the issue. Re-enter Phase 0 interactively to revise search terms or criteria. On new approval: reset to Phase 1, clear stale data files. |
 | 5 | completed (final) | Review is complete. Report final statistics and location of review.md. |
@@ -52,6 +52,9 @@ The orchestration loop is identical to the one in the research skill. For the cu
 7. On fail: retry once, then record failure and terminate
 8. Handle Phase 4→3 feedback loop (check conceptual saturation)
 9. Continue until Phase 5 completes or failure
+
+### Stop Policy
+Same as the research skill (Section 1, "Stop Policy"): after resuming, the only stops are `DECISION REQUIRED:` and `RECOVERY:`. Don't ask before advancing a phase whose postconditions passed.
 
 ### 5. Progress Reporting
 Same format as research skill:

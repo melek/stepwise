@@ -42,6 +42,15 @@ Phase 5: Synthesis               [autonomous — synthesize agent]
 
 Phase 0 is the only interactive phase. After protocol approval, Phases 1–5 run autonomously with you as orchestrator. You dispatch agents for each phase, verify postconditions, update state, and manage transitions.
 
+### Stop Policy (Phases 1–5)
+
+The protocol and the transition table (Section 5, `runbooks/postconditions.md`) are the decision authority between phases. Asking the user to confirm an action they already determine adds no information and trains the user to approve without reading. After Phase 0 there are exactly two kinds of stop:
+
+- **`DECISION REQUIRED:`** — a protocol-level fork the workspace can't resolve, such as revising the protocol versus aborting after an empty screening result. State the question, list every option, and recommend one.
+- **`RECOVERY:`** — a failure that needs something only the user can provide or judge: an API key, an unavailable MCP server, a corrupted file, or a phase that failed its retry. State what failed, the evidence, and your recommended action.
+
+Everything else proceeds without asking: advancing after a postcondition pass, the one automatic retry after a first failure, preprocessing, metric updates, spot checks, and progress lines. Progress lines (Section 8) are statements, never questions. If you are about to ask "advance?", "proceed?", "continue?" or "OK to…?" and the answer is already determined by the protocol or the transition table, don't ask — log the action and keep going. The user can interrupt at any time.
+
 ---
 
 ## Section 2: New Project Initialization
@@ -298,7 +307,7 @@ Then proceed immediately to Section 4: Autonomous Execution Loop.
 
 ## Section 4: Autonomous Execution Loop (Phases 1–5)
 
-After protocol approval, execute phases 1 through 5 sequentially without interrupting the user. You are the orchestrator: you dispatch agents, verify postconditions, update state, and manage transitions.
+After protocol approval, execute phases 1 through 5 sequentially without interrupting the user, except for the two stop types in the Stop Policy (Section 1). You are the orchestrator: you dispatch agents, verify postconditions, update state, and manage transitions.
 
 ### Determining Where to Start
 
@@ -362,8 +371,8 @@ After the agent returns, run the postcondition checks for that phase as specifie
     - `failure_reason`: description of which postcondition failed and why
     - `updated_at`: current timestamp
   - Log `phase_failed` event to `phase-log.jsonl`
-  - Print error message:
-    > "Phase {N} ({name}) failed after retry. Reason: {failure_reason}. The workspace is preserved at {WORKSPACE}. Use `/stepwise:continue` to resume after manual inspection."
+  - Print a recovery stop:
+    > "RECOVERY: Phase {N} ({name}) failed after retry. Failed checks: {failure_reason}. Evidence: {counts or example records}. Recommended: {your recommended fix}. The workspace is preserved at {WORKSPACE}; use `/stepwise:continue` to resume after fixing."
   - **Terminate.** Do not proceed to the next phase.
 
 ### 4.1 Agent Dispatch Prompts
@@ -488,7 +497,7 @@ Read `{WORKSPACE}/data/included.jsonl`. Count the number of records.
   Log `phase_diagnostic` event to `phase-log.jsonl`.
 
   Print:
-  > "No papers passed screening. The included corpus is empty. This typically means the search terms are too narrow, the inclusion criteria are too strict, or the date range excludes relevant work.
+  > "DECISION REQUIRED: No papers passed screening. The included corpus is empty. This typically means the search terms are too narrow, the inclusion criteria are too strict, or the date range excludes relevant work.
   >
   > To continue: review `{WORKSPACE}/logs/screening-log.jsonl` to understand why papers were excluded, then use `/stepwise:continue` to re-enter Phase 0 and revise the protocol."
 
@@ -621,7 +630,7 @@ Take the returned metrics object and write it into the `metrics` field of `{WORK
 
 ### Phase Completion Lines
 
-After each phase transition prints one progress line using this format:
+After each phase transition print one progress line using this format. These are informational: print and continue, don't wait for a reply.
 
 - **Phase 1 complete:**
   > "✓ Phase 1 (Search) complete — {total_candidates} candidates found"
@@ -705,10 +714,10 @@ Check postconditions. If any postcondition fails, follow the retry logic in Sect
 
 At the start of Phase 1, before dispatching the search agent, verify that both Semantic Scholar and arXiv MCP tools are accessible. Do a simple test call (e.g., `mcp__semantic-scholar__search_paper` with a trivial query, `mcp__arxiv__list_papers`).
 
-- If **both** servers are unavailable: report to the user and terminate. The search phase cannot proceed without at least one discovery source.
-- If **one** server is unavailable: warn the user:
+- If **both** servers are unavailable: print a `RECOVERY:` stop naming both servers and terminate. The search phase cannot proceed without at least one discovery source.
+- If **one** server is unavailable: print a warning (not a stop):
   > "Warning: {server} MCP is unavailable. The review will proceed using {other_server} only. Coverage may be reduced."
-  Continue with the available server. Record this in `phase-log.jsonl` as a `degraded_operation` event.
+  Continue with the available server without waiting for a reply. Record this in `phase-log.jsonl` as a `degraded_operation` event.
 - Unpaywall MCP (optional): attempt `mcp__unpaywall__unpaywall_get_by_doi` with a known DOI (e.g., `10.1145/3359591.3359735`). If unavailable, log and continue (papers with DOIs but no arXiv ID will remain abstract-only).
 
 ### Workspace Corruption
