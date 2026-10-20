@@ -114,7 +114,11 @@ def validate_extraction_field(
         failures.append(f"confidence: {conf!r} not in {{high, medium, low}}")
     if not record.get("source_location"):
         failures.append("source_location: empty or missing")
-    if parent_source == "abstract" and conf == "high":
+    # The ceiling applies to fields inferred from the abstract. Fields copied
+    # from the paper's metadata (title, year, venue, ...) keep their own
+    # confidence even on an abstract-only record (issue #28).
+    if (parent_source == "abstract" and conf == "high"
+            and record.get("source_location") != "metadata"):
         failures.append("confidence: 'high' not allowed when source is abstract")
     return _result(failures)
 
@@ -280,16 +284,35 @@ def check_no_duplicate_ids(candidates: list[dict]) -> tuple[bool, list[str]]:
     return (True, [])
 
 
+MAX_ABSTRACT_GAP = Fraction(1, 4)
+
+
 def check_minimum_metadata(candidates: list[dict]) -> tuple[bool, list[str]]:
+    """Every candidate has id, title, abstract, authors and year.
+
+    An abstract the source API doesn't provide is allowed when the record
+    says so with `metadata_gap: ["abstract"]`; screening excludes such
+    papers under the insufficient-content criterion anyway. If more than
+    MAX_ABSTRACT_GAP of all candidates lack an abstract, the search itself
+    is suspect and the check fails (issue #25).
+    """
     required = ["id", "title", "abstract", "authors", "year"]
     failures = []
+    gaps = 0
     for c in candidates:
         missing = [f for f in required if not c.get(f)]
-        if "authors" in [f for f in required if f not in missing]:
-            if not c.get("authors"):
-                missing.append("authors")
+        if "abstract" in missing:
+            gaps += 1
+            if "abstract" in (c.get("metadata_gap") or []):
+                missing.remove("abstract")
         if missing:
             failures.append(f"Candidate {c.get('id', '?')} missing: {', '.join(missing)}")
+    if candidates and Fraction(gaps, len(candidates)) > MAX_ABSTRACT_GAP:
+        failures.append(
+            f"{gaps}/{len(candidates)} candidates ({100 * gaps // len(candidates)}%) lack an "
+            f"abstract, over the {MAX_ABSTRACT_GAP.numerator * 100 // MAX_ABSTRACT_GAP.denominator}% "
+            f"limit; check the search itself"
+        )
     return _result(failures)
 
 
@@ -413,33 +436,45 @@ def check_all_seeds_examined(
 ) -> tuple[bool, list[str]]:
     """Every seed paper has forward and backward snowball entries.
 
-    Papers discovered at max_depth are terminal leaves and are exempt —
-    they cannot be snowballed further without exceeding the depth cap.
+    Papers discovered at the deepest level snowballing reached are terminal
+    leaves and are exempt: snowballing stopped there, either at the depth
+    cap or on discovery saturation, so they were never meant to be seeds
+    (issue #27). `max_depth` is accepted for compatibility; the deepest
+    `depth_level` in the log is what decides.
+
+    IDs are compared by `canonical_key` across all of a paper's ID forms,
+    since the log may record an S2 ID that was later promoted to a DOI
+    (issue #17). An empty-result sentinel entry (`discovered_paper_id` null,
+    issue #26) counts as evidence that its direction was examined.
     """
-    # Build set of terminal leaves (discovered at max_depth)
-    terminal_leaves: set[str] = set()
-    if max_depth > 0:
-        terminal_leaves = {
-            e["discovered_paper_id"]
-            for e in snowball_log
-            if e.get("depth_level") == max_depth
-            and not e.get("already_known", False)
-        }
+    depths =[e["depth_level"] for e in snowball_log if isinstance(e.get("depth_level"), int)]
+    terminal_depth = max(depths) if depths else None
+    terminal_leaves = {
+        canonical_key(e["discovered_paper_id"])
+        for e in snowball_log
+        if terminal_depth is not None
+        and e.get("depth_level") == terminal_depth
+        and e.get("discovered_paper_id")
+        and not e.get("already_known", False)
+    }
     forward_sources = {
-        e["source_paper_id"] for e in snowball_log if e.get("direction") == "forward"
+        canonical_key(e["source_paper_id"])
+        for e in snowball_log if e.get("direction") == "forward"
     }
     backward_sources = {
-        e["source_paper_id"] for e in snowball_log if e.get("direction") == "backward"
+        canonical_key(e["source_paper_id"])
+        for e in snowball_log if e.get("direction") == "backward"
     }
     failures = []
     for p in seed_papers:
         pid = p["id"]
-        if pid in terminal_leaves:
+        keys = _record_keys(p)
+        if keys & terminal_leaves:
             continue
         missing = []
-        if pid not in forward_sources:
+        if not keys & forward_sources:
             missing.append("forward")
-        if pid not in backward_sources:
+        if not keys & backward_sources:
             missing.append("backward")
         if missing:
             failures.append(f"Seed {pid} missing {', '.join(missing)} snowball entries")
@@ -459,19 +494,49 @@ def check_truncation_logged(snowball_log: list[dict]) -> tuple[bool, list[str]]:
     return _result(failures)
 
 
+_ID_PREFIXES = (
+    "https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "http://dx.doi.org/",
+    "doi:", "s2:", "arxiv:",
+)
+_ARXIV_VERSION = re.compile(r"^(\d{4}\.\d{4,5})v\d+$")
+
+
+def canonical_key(raw: str) -> str:
+    """Normalize one paper ID for comparison across ID forms.
+
+    Strips scheme prefixes (`doi:`, `s2:`, `arxiv:`, doi.org URLs), an
+    arXiv version suffix, and case (DOIs are case-insensitive; S2 and arXiv
+    IDs are lowercase). `pmid:` is kept: it is the canonical form for
+    PubMed-only records, and a bare number would be ambiguous.
+    """
+    key = str(raw).strip().lower()
+    for prefix in _ID_PREFIXES:
+        if key.startswith(prefix):
+            key = key[len(prefix):]
+            break
+    m = _ARXIV_VERSION.match(key)
+    return m.group(1) if m else key
+
+
+def _record_keys(record: dict) -> set[str]:
+    """Every normalized ID form a paper record is known by."""
+    return {
+        canonical_key(v)
+        for v in (record.get(k) for k in ("id", "s2_id", "doi", "arxiv_id"))
+        if v
+    }
+
+
 def _all_ids(records: list[dict]) -> set[str]:
     """Build a set of all known ID forms for a list of paper records.
 
     Handles canonical ID promotion (e.g., S2 hash → DOI) by collecting
-    every non-null ID field so lookups match regardless of which form
-    was recorded in the snowball log.
+    every non-null ID field, normalized with `canonical_key`, so lookups
+    match regardless of which form or prefix the snowball log recorded.
     """
     ids: set[str] = set()
     for r in records:
-        for key in ("id", "s2_id", "doi", "arxiv_id"):
-            v = r.get(key)
-            if v:
-                ids.add(v)
+        ids |= _record_keys(r)
     return ids
 
 
@@ -487,9 +552,9 @@ def check_new_inclusions_recorded(
     for e in snowball_log:
         if e.get("screening_decision") == "include":
             pid = e["discovered_paper_id"]
-            if pid not in included_ids:
+            if canonical_key(pid) not in included_ids:
                 failures.append(f"Snowball include {pid} not in included.jsonl")
-            if pid not in candidate_ids:
+            if canonical_key(pid) not in candidate_ids:
                 failures.append(f"Snowball include {pid} not in candidates.jsonl")
     return _result(failures)
 

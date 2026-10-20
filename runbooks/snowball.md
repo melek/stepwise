@@ -93,12 +93,18 @@ Papers in included.jsonl that are NOT in the already-snowballed set.
         ```
      h. If screening_decision = include: append to `{workspace}/data/included.jsonl`
 
-4. **Log citation counts for seed paper:**
+4. **Log empty directions:** If a direction (backward or forward) produced no snowball-log entry for this seed — the API returned an empty `references`/`citations` array, or omitted the field — append a marker so the seed still has evidence of being examined in that direction:
+   ```json
+   {"source_paper_id": "{seed_id}", "direction": "{backward|forward}", "discovered_paper_id": null, "already_known": null, "screening_decision": null, "depth_level": {d}, "timestamp": "{ISO-8601}", "total_citations_available": 0, "citations_retrieved": 0, "truncated": false, "note": "empty_array_from_api"}
+   ```
+   Use `"note": "field_unavailable_from_api"` when the field was missing rather than empty. Markers are excluded from saturation counts.
+
+5. **Log citation counts for seed paper:**
    After processing all citations for a seed, if the number retrieved < total available, set `truncated: true` in the log entry for that seed.
 
 **D. Compute discovery saturation for depth d:**
 - Count entries in snowball-log.jsonl at `depth_level = d` where `already_known = false` and `screening_decision = include` → newly_included
-- Count ALL entries at `depth_level = d` where `already_known = false` → total_examined
+- Count entries at `depth_level = d` where `already_known = false` and `discovered_paper_id` is non-null (excludes empty-direction markers) → total_examined
 - If total_examined = 0: saturation = 0
 - Else: saturation = newly_included / total_examined
 - Log to `{workspace}/logs/phase-log.jsonl`:

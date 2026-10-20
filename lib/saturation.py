@@ -13,13 +13,29 @@ Verified properties:
 from fractions import Fraction
 
 
+def is_sentinel(entry: dict) -> bool:
+    """True for an empty-result marker: the log entry a snowball agent
+    writes when a seed's references or citations came back empty, so the
+    direction still has evidence of being examined. It records no
+    discovered paper (`discovered_paper_id` present and null)."""
+    return "discovered_paper_id" in entry and entry["discovered_paper_id"] is None
+
+
 def discovery_saturation(snowball_log: list[dict], depth: int) -> Fraction:
     """Compute discovery saturation at a given depth level.
 
-    Returns |newly_included_at_depth| / |total_examined_at_depth|.
+    Returns |newly_included_at_depth| / |newly_examined_at_depth|, where
+    "newly examined" means an actual discovered paper (not an empty-result
+    sentinel) that wasn't already known. Already-known papers aren't new
+    discoveries, so they'd only dilute the yield the threshold measures.
     Returns Fraction(0) when denominator is 0.
     """
-    at_depth = [e for e in snowball_log if e.get("depth_level") == depth]
+    at_depth = [
+        e for e in snowball_log
+        if e.get("depth_level") == depth
+        and not is_sentinel(e)
+        and not e.get("already_known", False)
+    ]
     denominator = len(at_depth)
     if denominator == 0:
         return Fraction(0)

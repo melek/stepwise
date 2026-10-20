@@ -61,6 +61,8 @@ parameters for structured filtering instead of query-level Boolean logic.
 - Deduplicate results against existing candidates using DOI matching
 - Record source as "paper-search-mcp" in `discovered_by_query`
 
+**Missing abstracts:** If a result has no abstract, make one targeted lookup before writing the record: `mcp__semantic-scholar__get_paper` with `fields=abstract` for records with an S2 ID, or the arXiv abstract for records with an arXiv ID. Log the attempt to `logs/search-log.jsonl` as `{"timestamp": "{ISO-8601}", "event": "abstract_lookup", "paper_id": "{canonical_id}", "found": true|false}`. If it still has none, write the record anyway with `"abstract": null` and `"metadata_gap": ["abstract"]`. Do not fabricate or paraphrase an abstract. The Phase 1 postcondition accepts tagged gaps up to 25% of candidates.
+
 After each query, append to `logs/search-log.jsonl`:
 ```json
 {"query": "{query}", "database": "{database}", "timestamp": "{ISO-8601}", "result_count": {N}, "parameters": {"limit": {N}, "year_range": "{start}-{end}"}}

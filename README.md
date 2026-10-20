@@ -64,7 +64,7 @@ The state machine (phase transitions, retry bounds, status validity) and saturat
 | `spec/state.dfy` | Forward progress, no phase skipping, feedback bound, retry bound (≤1), terminal correctness, monotonic completion |
 | `spec/saturation.dfy` | Range [0,1], zero-denominator safety, termination threshold, feedback bound |
 
-Python implementations in `lib/` mirror the Dafny specs and are tested (222 tests, pytest).
+Python implementations in `lib/` mirror the Dafny specs and are tested (240 tests, pytest).
 
 ## Installation
 
