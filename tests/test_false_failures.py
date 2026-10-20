@@ -204,3 +204,26 @@ def test_gap_tag_does_not_excuse_other_fields():
     c["title"] = None
     ok, failures = check_minimum_metadata([c] + [_cand(i) for i in range(1, 8)])
     assert not ok and "title" in failures[0]
+
+
+# --- schema drift: a record without its ID field is reported, never raised ---
+
+
+def test_checks_report_records_missing_id_instead_of_crashing():
+    from lib.postconditions import (
+        check_all_candidates_screened, check_all_papers_extracted,
+        check_included_consistency, check_no_duplicate_ids, check_no_orphan_inclusions,
+    )
+    drifted = {"paper_id": "p1", "title": "Drifted"}
+    for check, args in [
+        (check_all_candidates_screened, ([drifted], [])),
+        (check_included_consistency, ([drifted], [])),
+        (check_no_orphan_inclusions, ([drifted], [])),
+        (check_all_papers_extracted, ([drifted], [])),
+        (check_all_seeds_examined, ([drifted], [])),
+    ]:
+        ok, failures = check(*args)
+        assert not ok and "no 'id' field" in failures[0] and "Drifted" in failures[0], check.__name__
+    assert check_no_duplicate_ids([drifted])[0]  # left to check_minimum_metadata
+    ok, failures = check_new_inclusions_recorded([{"screening_decision": "include"}], [], [])
+    assert not ok and "discovered_paper_id" in failures[0]

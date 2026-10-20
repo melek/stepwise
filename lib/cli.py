@@ -24,6 +24,15 @@ from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
 
+# The skills run this file by path (`python3 {PLUGIN_DIR}/lib/cli.py ...`),
+# which leaves no package context for the relative imports below. Make the
+# plugin root importable and adopt the `lib` package so both that form and
+# `python3 -m lib.cli` work.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import lib  # noqa: E402,F401
+    __package__ = "lib"
+
 from . import export as exp
 from . import metrics as m
 from . import oracle_contracts as oc
@@ -33,6 +42,7 @@ from . import prisma as pr
 from . import saturation as sat
 from . import section_parser as sp
 from . import state as st
+from . import orchestrate as orch
 
 
 # --- JSONL I/O helpers ---
@@ -230,6 +240,37 @@ _DB_CANONICAL = {
 }
 
 
+BOUND_DEFAULTS = {
+    "max_snowball_depth": 2,
+    "discovery_saturation_threshold": Fraction(5, 100),
+    "conceptual_saturation_k": 5,
+    "conceptual_saturation_threshold": Fraction(1, 10),
+    "max_feedback_iterations": 2,
+}
+
+
+def parse_protocol_bounds(text: str) -> dict:
+    """Read the phase bounds from protocol.md text.
+
+    The template stores them as table rows such as
+    `| discovery_saturation_threshold (θ_d) | 0.05 |`; `name: value` and
+    backticked forms are accepted too. Missing or unfilled values fall back
+    to BOUND_DEFAULTS, the defaults the research skill documents.
+    """
+    bounds = dict(BOUND_DEFAULTS)
+    for name, default in BOUND_DEFAULTS.items():
+        match = re.search(rf"{name}\b[^|\n:]*[|:]\s*`?([0-9]+(?:\.[0-9]+)?)", text)
+        if match:
+            raw = match.group(1)
+            bounds[name] = int(float(raw)) if isinstance(default, int) else Fraction(raw)
+    return bounds
+
+
+def read_protocol_bounds(workspace: Path) -> dict:
+    path = workspace / "protocol.md"
+    return parse_protocol_bounds(path.read_text()) if path.exists() else dict(BOUND_DEFAULTS)
+
+
 def _normalize_database(name: str) -> str:
     """Normalize database name to canonical snake_case form."""
     return _DB_CANONICAL.get(name.lower().strip(), name.lower().strip().replace(" ", "_"))
@@ -252,9 +293,8 @@ def cmd_metrics(args: argparse.Namespace) -> None:
     print()
 
 
-def cmd_postcondition(args: argparse.Namespace) -> None:
-    workspace = Path(args.workspace).expanduser()
-    phase = args.phase
+def evaluate_postconditions(workspace: Path, phase: int) -> tuple[bool, list[str]]:
+    """Run the postcondition checks for one phase against a workspace."""
     data = load_workspace_data(workspace)
 
     if phase == 1:
@@ -267,20 +307,9 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
             data["candidates"], data["screening_log"], data["included"]
         )
     elif phase == 3:
-        state = read_json(workspace / "state.json")
-        protocol = read_json(workspace / "protocol.md") if False else {}
-        # Read bounds from protocol.md text
-        protocol_path = workspace / "protocol.md"
-        max_depth = 2
-        threshold = Fraction(5, 100)
-        if protocol_path.exists():
-            ptext = protocol_path.read_text()
-            md_match = re.search(r"max_snowball_depth[`\s:]*(\d+)", ptext)
-            if md_match:
-                max_depth = int(md_match.group(1))
-            td_match = re.search(r"discovery_saturation_threshold[`\s:]*([0-9.]+)", ptext)
-            if td_match:
-                threshold = Fraction(td_match.group(1))
+        bounds = read_protocol_bounds(workspace)
+        max_depth = bounds["max_snowball_depth"]
+        threshold = bounds["discovery_saturation_threshold"]
         satisfied, failures = pc.check_phase3_all(
             seed_papers=data["included"],
             snowball_log=data["snowball_log"],
@@ -333,10 +362,17 @@ def cmd_postcondition(args: argparse.Namespace) -> None:
             output_format=output_format,
         )
     else:
-        print(json.dumps({"error": f"Invalid phase: {phase}"}))
-        sys.exit(1)
-        return
+        raise ValueError(f"Invalid phase: {phase}")
+    return satisfied, failures
 
+
+def cmd_postcondition(args: argparse.Namespace) -> None:
+    workspace = Path(args.workspace).expanduser()
+    try:
+        satisfied, failures = evaluate_postconditions(workspace, args.phase)
+    except ValueError as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
     json.dump({"satisfied": satisfied, "failures": failures}, sys.stdout, indent=2)
     print()
 
@@ -396,6 +432,149 @@ def cmd_transition(args: argparse.Namespace) -> None:
     print()
 
 
+def _machine_state(state_data: dict) -> dict:
+    """The state-machine record for a state.json document."""
+    phase_completed = [False] * 6
+    for entry in state_data.get("phase_history", []):
+        if entry.get("completed_at") is not None:
+            phase_completed[entry["phase"]] = True
+    return st.make_state(
+        current_phase=state_data["current_phase"],
+        phase_status=state_data["phase_status"],
+        feedback_iterations=state_data.get("feedback_iterations", 0),
+        retry_count=state_data.get("retry_count", 0),
+        phase_completed=phase_completed,
+    )
+
+
+def _plain(value):
+    return getattr(value, "value", value)
+
+
+def cmd_step(args: argparse.Namespace) -> None:
+    """Decide the next orchestration step, apply it, and print what to do.
+
+    The orchestrator calls this once to begin and again after every agent
+    returns. It runs the postconditions when a phase is in progress, applies
+    the transition table (lib/orchestrate.py) to state.json and
+    phase-log.jsonl, runs deterministic preprocessing, and prints one JSON
+    instruction: dispatch a phase agent, stop (DECISION or RECOVERY), or done.
+    """
+    workspace = Path(args.workspace).expanduser()
+    state_path = workspace / "state.json"
+    state_data = read_json(state_path)
+    ts = now_iso()
+    log_events: list[dict] = []
+
+    if args.reset:
+        if state_data.get("phase_status") != st.PhaseStatus.FAILED:
+            print(json.dumps({"error": "--reset only applies to a failed phase"}))
+            sys.exit(1)
+        state_data.update(phase_status="pending", retry_count=0, failure_reason=None)
+        log_events.append({"event": "user_reset", "phase": state_data["current_phase"]})
+
+    machine = _machine_state(state_data)
+    phase = machine["current_phase"]
+    bounds = read_protocol_bounds(workspace)
+
+    ok, failures = None, []
+    if machine["phase_status"] == st.PhaseStatus.IN_PROGRESS and 1 <= phase <= 5:
+        ok, failures = evaluate_postconditions(workspace, phase)
+
+    data = load_workspace_data(workspace)
+    delta = None
+    if phase == 4 and data["extractions"]:
+        extractions = sorted(data["extractions"], key=lambda e: e.get("timestamp", ""))
+        last_k = {e.get("paper_id") for e in extractions[-bounds["conceptual_saturation_k"]:]} - {None}
+        delta = sat.conceptual_saturation(data["concepts"], last_k)
+
+    decision = orch.decide(machine, orch.Evidence(
+        protocol_approved=bool(state_data.get("protocol_approved")),
+        postcondition_ok=ok,
+        failures=tuple(failures),
+        included_count=len(data["included"]),
+        conceptual_saturation=delta,
+        conceptual_threshold=bounds["conceptual_saturation_threshold"],
+        max_feedback_iterations=bounds["max_feedback_iterations"],
+    ))
+
+    new = decision.state
+    state_data.update(
+        current_phase=new["current_phase"],
+        phase_status=_plain(new["phase_status"]),
+        feedback_iterations=new["feedback_iterations"],
+        retry_count=new["retry_count"],
+        updated_at=ts,
+    )
+    if decision.stop == "RECOVERY" and decision.failures:
+        state_data["failure_reason"] = "; ".join(decision.failures[:5])
+    elif decision.action == "dispatch" and not decision.retry:
+        state_data["failure_reason"] = None
+
+    history = state_data.setdefault("phase_history", [])
+    for event in decision.events:
+        if event["event"] == "phase_complete":
+            for entry in reversed(history):
+                if entry.get("phase") == event["phase"] and entry.get("completed_at") is None:
+                    entry["completed_at"] = ts
+                    break
+        elif event["event"] == "phase_start":
+            history.append({"phase": event["phase"], "started_at": ts, "completed_at": None,
+                            "agent_id": None, "work_units_completed": 0, "notes": None})
+        log_events.append(event)
+
+    if decision.completed_phase is not None:
+        metrics = state_data.setdefault("metrics", {})
+        metrics.update(m.recompute_all(
+            screening_log=data["screening_log"], candidates=data["candidates"],
+            included=data["included"], snowball_log=data["snowball_log"],
+            extractions=data["extractions"], concepts=data["concepts"],
+        ))
+        discovery = [e for e in data["phase_log"]
+                     if e.get("event") == "saturation_check" and e.get("phase") == 3]
+        if discovery:
+            metrics["discovery_saturation"] = discovery[-1].get("saturation_metric")
+        if decision.completed_phase == 4 and delta is not None:
+            metrics["conceptual_saturation"] = float(delta)
+
+    preprocess = None
+    if decision.preprocess:
+        try:
+            preprocess = run_preprocess(workspace, decision.preprocess)
+            log_events.append({"event": "preprocess", "type": decision.preprocess, **preprocess})
+        except Exception as e:  # advisory: never blocks the run
+            preprocess = {"error": str(e)}
+            log_events.append({"event": "preprocess_failed", "type": decision.preprocess,
+                               "error": str(e)})
+
+    log_path = workspace / "logs" / "phase-log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a") as f:
+        for event in log_events:
+            f.write(json.dumps({"timestamp": ts, **event}) + "\n")
+    write_json(state_path, state_data)
+
+    out_phase = state_data["current_phase"]
+    message = None
+    if decision.action == "stop":
+        prefix = "DECISION REQUIRED" if decision.stop == "DECISION" else "RECOVERY"
+        message = f"{prefix}: {decision.reason}"
+    json.dump({
+        "action": decision.action,
+        "phase": out_phase,
+        "phase_name": orch.PHASE_NAMES.get(out_phase),
+        "retry": decision.retry,
+        "feedback_iteration": state_data["feedback_iterations"],
+        "failures": list(decision.failures[:20]),
+        "stop": decision.stop,
+        "message": message,
+        "completed_phase": decision.completed_phase,
+        "metrics": state_data.get("metrics") if decision.completed_phase is not None else None,
+        "preprocess": preprocess,
+    }, sys.stdout, indent=2)
+    print()
+
+
 def cmd_saturation(args: argparse.Namespace) -> None:
     workspace = Path(args.workspace).expanduser()
     data = load_workspace_data(workspace)
@@ -413,7 +592,7 @@ def cmd_saturation(args: argparse.Namespace) -> None:
         k = args.k or 5
         # Get last k papers by timestamp from extractions
         extractions = sorted(data["extractions"], key=lambda e: e.get("timestamp", ""))
-        last_k_ids = {e["paper_id"] for e in extractions[-k:]} if extractions else set()
+        last_k_ids = ({e.get("paper_id") for e in extractions[-k:]} - {None}) if extractions else set()
         result = sat.conceptual_saturation(data["concepts"], last_k_ids)
         json.dump({
             "type": "conceptual",
@@ -499,11 +678,11 @@ def _parse_protocol_criteria(workspace: Path) -> list[dict]:
     return criteria
 
 
-def cmd_preprocess(args: argparse.Namespace) -> None:
-    workspace = Path(args.workspace).expanduser()
+def run_preprocess(workspace: Path, kind: str) -> dict:
+    """Run deterministic preprocessing ("screening" or "synthesis"); return a summary."""
     data = load_workspace_data(workspace)
 
-    if args.type == "screening":
+    if kind == "screening":
         # Parse criteria from protocol.md
         criteria = _parse_protocol_criteria(workspace)
         results = []
@@ -518,15 +697,18 @@ def cmd_preprocess(args: argparse.Namespace) -> None:
         with open(output_path, "w") as f:
             for r in results:
                 f.write(json.dumps(r) + "\n")
-        json.dump({"written": str(output_path), "records": len(results)}, sys.stdout, indent=2)
+        return {"written": str(output_path), "records": len(results)}
 
-    elif args.type == "synthesis":
-        result = prep.preprocess_for_synthesis(data["extractions"], data["concepts"])
-        output_path = workspace / "data" / "preprocessed-synthesis.json"
-        with open(output_path, "w") as f:
-            json.dump(result, f, indent=2)
-        json.dump({"written": str(output_path), "themes": len(result.get("themes", []))}, sys.stdout, indent=2)
+    result = prep.preprocess_for_synthesis(data["extractions"], data["concepts"])
+    output_path = workspace / "data" / "preprocessed-synthesis.json"
+    with open(output_path, "w") as f:
+        json.dump(result, f, indent=2)
+    return {"written": str(output_path), "themes": len(result.get("themes", []))}
 
+
+def cmd_preprocess(args: argparse.Namespace) -> None:
+    workspace = Path(args.workspace).expanduser()
+    json.dump(run_preprocess(workspace, args.type), sys.stdout, indent=2)
     print()
 
 
@@ -604,6 +786,12 @@ def main() -> None:
     p_trans.add_argument("--workspace", required=True)
     p_trans.add_argument("--max-iterations", type=int, default=2)
 
+    # step
+    p_step = sub.add_parser("step", help="Decide and apply the next orchestration step")
+    p_step.add_argument("--workspace", required=True)
+    p_step.add_argument("--reset", action="store_true",
+                        help="After a RECOVERY stop: reset the failed phase to pending and retry")
+
     # saturation
     p_sat = sub.add_parser("saturation", help="Compute saturation metric")
     p_sat.add_argument("--type", required=True, choices=["discovery", "conceptual"])
@@ -647,6 +835,7 @@ def main() -> None:
         "metrics": cmd_metrics,
         "postcondition": cmd_postcondition,
         "transition": cmd_transition,
+        "step": cmd_step,
         "saturation": cmd_saturation,
         "parse-sections": cmd_parse_sections,
         "validate-inference": cmd_validate_inference,

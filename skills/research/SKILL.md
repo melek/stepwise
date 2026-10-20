@@ -309,71 +309,35 @@ Then proceed immediately to Section 4: Autonomous Execution Loop.
 
 After protocol approval, execute phases 1 through 5 sequentially without interrupting the user, except for the two stop types in the Stop Policy (Section 1). You are the orchestrator: you dispatch agents, verify postconditions, update state, and manage transitions.
 
-### Determining Where to Start
-
-Read `{WORKSPACE}/state.json`. Start from `current_phase`. If `phase_status` is `"pending"` or `"in_progress"`, execute that phase. If `phase_status` is `"completed"`, advance to the next phase.
-
 ### The Execution Loop
 
-For each phase from `current_phase` to 5:
+Every advance, retry and stop is computed by `lib/cli.py step` from the protocol, the workspace and the transition table. Don't evaluate the table yourself, and don't edit `state.json` or `phase-log.jsonl` by hand during Phases 1–5.
 
-**Step A: Update state.json — phase starting**
+**1. Ask `step` what to do.** Run it once to begin (or resume), and again every time an agent returns:
 
-Update `{WORKSPACE}/state.json`:
-- `current_phase`: N
-- `phase_status`: `"in_progress"`
-- `updated_at`: current ISO-8601 timestamp
-- Append to `phase_history`: `{"phase": N, "started_at": "{ISO-8601}", "completed_at": null, "agent_id": null, "work_units_completed": 0, "notes": null}`
-
-**Step B: Log phase_start**
-
-Append to `{WORKSPACE}/logs/phase-log.jsonl`:
-```json
-{"event": "phase_start", "phase": N, "phase_name": "{name}", "timestamp": "{ISO-8601}"}
+```bash
+python3 {PLUGIN_DIR}/lib/cli.py step --workspace {WORKSPACE}
 ```
 
-Phase names: 1=`"search"`, 2=`"screening"`, 3=`"snowballing"`, 4=`"extraction"`, 5=`"synthesis"`
+When a phase is in progress, `step` runs that phase's postconditions. It then applies the transition (state.json, phase_history, metrics, phase-log.jsonl, the screening and synthesis preprocessing) and prints one instruction:
 
-**Step C: Dispatch the phase agent**
+```json
+{"action": "dispatch", "phase": 2, "phase_name": "screening", "retry": false,
+ "feedback_iteration": 0, "failures": [], "stop": null, "message": null,
+ "completed_phase": 1, "metrics": {...}, "preprocess": {...}}
+```
 
-Use the Agent tool with the prompt specified in Section 4.1 below.
+**2. Do what it says.**
 
-**Step D: Run postcondition checks**
+- **`dispatch`** — If `completed_phase` is set, print that phase's progress line (Section 8) from `metrics`. Then dispatch the agent for `phase` with its prompt from Section 4.1:
+  - `phase` is 3 and `completed_phase` is 4: use the feedback-iteration prompt (`feedback_iteration` is the iteration number).
+  - `retry` is true: append the retry context with the `failures` list.
 
-After the agent returns, run the postcondition checks for that phase as specified in Section 6. These are deterministic filesystem checks — read files, verify structural conditions.
+  When the agent returns, go back to step 1.
+- **`stop`** — Print `message` exactly as given (it begins `DECISION REQUIRED:` or `RECOVERY:`). For a recovery, follow it with the `failures`, the evidence you see in the workspace, and your recommended fix. Then end the run. This is the only way a run stops.
+- **`done`** — Print the Phase 5 progress line and the completion summary (Section 8).
 
-**Step E: On postcondition PASS**
-
-1. Update metrics in state.json from workspace files (see Section 7)
-2. Log `phase_complete` to `phase-log.jsonl`:
-   ```json
-   {"event": "phase_complete", "phase": N, "phase_name": "{name}", "timestamp": "{ISO-8601}", "metrics": {<current metrics snapshot>}}
-   ```
-3. Update state.json:
-   - `phase_status`: `"completed"`
-   - `updated_at`: current timestamp
-   - Update the last entry in `phase_history`: set `completed_at` to current timestamp, `work_units_completed` to relevant count from metrics
-4. Print progress line (see Section 8)
-5. Execute transition logic (see Section 5)
-
-**Step F: On postcondition FAIL**
-
-- If this is the **first** failure for this phase:
-  - Log `phase_retry` event to `phase-log.jsonl`:
-    ```json
-    {"event": "phase_retry", "phase": N, "phase_name": "{name}", "timestamp": "{ISO-8601}", "reason": "{which check failed}"}
-    ```
-  - Re-dispatch the agent (repeat Step C). Include context about which postcondition failed in the agent prompt, so the agent knows what to fix.
-  - Repeat Steps D–F.
-- If this is the **second** failure (retry also failed):
-  - Update state.json:
-    - `phase_status`: `"failed"`
-    - `failure_reason`: description of which postcondition failed and why
-    - `updated_at`: current timestamp
-  - Log `phase_failed` event to `phase-log.jsonl`
-  - Print a recovery stop:
-    > "RECOVERY: Phase {N} ({name}) failed after retry. Failed checks: {failure_reason}. Evidence: {counts or example records}. Recommended: {your recommended fix}. The workspace is preserved at {WORKSPACE}; use `/stepwise:continue` to resume after fixing."
-  - **Terminate.** Do not proceed to the next phase.
+Resuming works the same way: `step` handles every status. A phase left `in_progress` by an interruption is checked, and completed if its work is done. A failed phase is a recovery stop; after the user fixes the cause, `step --reset` retries it.
 
 ### 4.1 Agent Dispatch Prompts
 
@@ -457,172 +421,40 @@ Execute all steps in the runbook. Write all output files to the workspace as spe
 
 **On retry (any phase):** Append this to the dispatch prompt:
 ```
-RETRY CONTEXT: This is a retry. The previous execution failed the following postcondition check: {which_check_failed}. Inspect the workspace files, identify what is missing or malformed, and complete or repair the output before terminating.
+RETRY CONTEXT: This is a retry. The previous execution failed these postcondition checks: {failures from step}. Inspect the workspace files, identify what is missing or malformed, and complete or repair the output before terminating.
 ```
 
 ---
 
 ## Section 5: Transition Logic
 
-After each phase passes its postconditions, apply the following transition rules before proceeding to the next phase. These rules are deterministic — evaluate them by reading workspace files.
+`step` computes transitions with `decide()` in `{PLUGIN_DIR}/lib/orchestrate.py`, which is proved in `lib/verified/decide.dfy`. That code is authoritative. This summary is for reading only:
 
-### Phase 1 → Phase 2
+| After | Condition | Next |
+|-------|-----------|------|
+| Postconditions pass, Phase 1 | — | Screening preprocessing, then Phase 2 |
+| Postconditions pass, Phase 2 | Included corpus non-empty | Phase 3 |
+| Postconditions pass, Phase 2 | Included corpus empty | `DECISION REQUIRED` stop (`needs_protocol_revision`) |
+| Postconditions pass, Phase 3 | — | Phase 4 |
+| Postconditions pass, Phase 4 | Δ(n,k) ≥ θ_c and feedback iterations < max | Back to Phase 3 (feedback iteration) |
+| Postconditions pass, Phase 4 | Otherwise | Synthesis preprocessing, then Phase 5 |
+| Postconditions pass, Phase 5 | — | Done |
+| Postconditions fail | First failure in this phase | Automatic retry |
+| Postconditions fail | After the retry | `RECOVERY` stop (phase `failed`) |
 
-Before transitioning, run screening preprocessing to generate evidence windows:
+The bounds (`max_snowball_depth`, θ_d, k, θ_c, `max_feedback_iterations`) come from the Phase Bounds table in `protocol.md`.
 
-```bash
-python3 {PLUGIN_DIR}/lib/cli.py preprocess --type screening --workspace {WORKSPACE}
-```
+## Section 6: Postcondition Checks
 
-This creates `{WORKSPACE}/data/preprocessed-screening.jsonl`. Log a `preprocess` event to `phase-log.jsonl`:
-```json
-{"event": "preprocess", "type": "screening", "timestamp": "{ISO-8601}", "records": {N}}
-```
-
-If the preprocess command fails, log `preprocess_failed` and continue — preprocessing is advisory, not blocking.
-
-Then update `state.json` to `current_phase: 2, phase_status: "pending"`.
-
-### Phase 2 → Phase 3 (or diagnostic)
-
-Read `{WORKSPACE}/data/included.jsonl`. Count the number of records.
-
-- **If count > 0:** Direct transition to Phase 3. Update `state.json` to `current_phase: 3, phase_status: "pending"`.
-- **If count = 0:** Diagnostic transition. Update `state.json`:
-  - `current_phase`: 2
-  - `phase_status`: `"needs_protocol_revision"`
-  - `failure_reason`: `"No papers passed screening. Included corpus is empty."`
-  - `updated_at`: current timestamp
-
-  Log `phase_diagnostic` event to `phase-log.jsonl`.
-
-  Print:
-  > "DECISION REQUIRED: No papers passed screening. The included corpus is empty. This typically means the search terms are too narrow, the inclusion criteria are too strict, or the date range excludes relevant work.
-  >
-  > To continue: review `{WORKSPACE}/logs/screening-log.jsonl` to understand why papers were excluded, then use `/stepwise:continue` to re-enter Phase 0 and revise the protocol."
-
-  **Terminate.** Do not proceed.
-
-### Phase 3 → Phase 4
-
-Direct transition. Update `state.json` to `current_phase: 4, phase_status: "pending"`.
-
-### Phase 4 → Phase 3 (feedback loop) or Phase 5
-
-After Phase 4 postconditions pass, compute conceptual saturation `Δ(n, k)` using the CLI:
-
-```bash
-python3 {PLUGIN_DIR}/lib/cli.py saturation --type conceptual --k {k} --workspace {WORKSPACE}
-```
-
-Where `k` is the `conceptual_saturation_k` value from `protocol.md`. The CLI returns:
-```json
-{"type": "conceptual", "k": 5, "saturation": "3/28", "saturation_float": 0.107}
-```
-
-Read `feedback_iterations` from `state.json`. Read `max_feedback_iterations` and `θ_c` from `protocol.md`.
-
-**Decision:**
-
-- If `Δ(n, k) ≥ θ_c` AND `feedback_iterations < max_feedback_iterations`:
-  - Increment `feedback_iterations` in `state.json`
-  - Log `saturation_check` to `phase-log.jsonl`:
-    ```json
-    {"event": "saturation_check", "phase": 4, "type": "conceptual", "timestamp": "{ISO-8601}", "saturation_metric": "{Δ}", "threshold": "{θ_c}", "decision": "feedback_loop", "feedback_iteration": N}
-    ```
-  - Update `state.json` to `current_phase: 3, phase_status: "pending"`
-  - Print:
-    > "Conceptual saturation Δ(n,k) = {Δ:.3f} ≥ θ_c = {θ_c}. Concept space still expanding. Initiating feedback loop (iteration {N} of {max}). Returning to Phase 3."
-  - Proceed to Phase 3 using the feedback-loop dispatch prompt.
-
-- If `Δ(n, k) < θ_c` OR `feedback_iterations ≥ max_feedback_iterations`:
-  - Log `saturation_check` to `phase-log.jsonl`:
-    ```json
-    {"event": "saturation_check", "phase": 4, "type": "conceptual", "timestamp": "{ISO-8601}", "saturation_metric": "{Δ}", "threshold": "{θ_c}", "decision": "proceed_to_synthesis"}
-    ```
-  - Update `state.json` to `current_phase: 5, phase_status: "pending"`
-  - Update `state.json` metrics: `conceptual_saturation: Δ`
-  - Run synthesis preprocessing to generate themed briefs:
-    ```bash
-    python3 {PLUGIN_DIR}/lib/cli.py preprocess --type synthesis --workspace {WORKSPACE}
-    ```
-    Log a `preprocess` event. If it fails, log and continue.
-  - Proceed to Phase 5.
-
-### Phase 5 → Done
-
-After Phase 5 postconditions pass:
-1. Update `state.json`:
-   - `current_phase`: 5
-   - `phase_status`: `"completed"`
-   - `updated_at`: current timestamp
-2. Print the full completion summary (see Section 8).
-
----
-
-## Section 6: Postcondition Check Procedure
-
-After each phase agent returns, run the postcondition checks defined in `{PLUGIN_DIR}/runbooks/postconditions.md`. The checks are deterministic — read files, verify structural conditions. No inference.
-
-### How to Run Checks
-
-Run the verified postcondition checker via CLI:
+`step` runs these. They're specified in `{PLUGIN_DIR}/runbooks/postconditions.md`. To inspect one phase by hand:
 
 ```bash
 python3 {PLUGIN_DIR}/lib/cli.py postcondition --phase {N} --workspace {WORKSPACE}
 ```
 
-The CLI reads all workspace files and returns JSON:
-```json
-{"satisfied": true, "failures": []}
-```
+## Section 7: Metrics
 
-If `satisfied` is `true`: proceed to Step E of the execution loop (metrics update and transition).
-
-If `satisfied` is `false`: the `failures` array lists what failed. Proceed to Step F (retry logic). Include the failure descriptions in the retry dispatch prompt.
-
-The complete check specifications are also documented in `{PLUGIN_DIR}/runbooks/postconditions.md` for reference.
-
-### Phase-specific Check Summary
-
-The complete check specifications are in `{PLUGIN_DIR}/runbooks/postconditions.md`. Summary of what is checked per phase:
-
-- **Phase 1:** All queries from protocol were executed; candidates.jsonl non-empty; no duplicate IDs; every record has id, title, abstract, authors, year.
-- **Phase 2:** All candidates have a final screening decision; every paper in included.jsonl has a corresponding include decision in screening-log.jsonl; no orphan inclusions.
-- **Phase 3:** Termination condition met (saturation or max depth); all seed papers have forward and backward snowball entries; truncations logged; new inclusions in candidates.jsonl and included.jsonl.
-- **Phase 4:** All included papers have extraction records; concepts.jsonl non-empty; concept-matrix.md exists; all referenced concept IDs are defined; saturation check event logged.
-- **Phase 5:** All included papers listed in Appendix A; all sub-questions addressed in question-answers.jsonl; bibliography count matches body citation count in review.md; all required section headers present; Appendix A row count matches included.jsonl.
-
----
-
-## Section 7: Metrics Update
-
-After **every** phase passes postconditions (Phases 1 through 5), run the full recount procedure below. Do not skip any metric — recount all of them every time. This ensures metrics stay consistent even when later phases modify shared files (e.g., Phase 3 appends to `included.jsonl` and `candidates.jsonl`).
-
-### Metric Computation
-
-Run the verified metrics recount via CLI:
-
-```bash
-python3 {PLUGIN_DIR}/lib/cli.py metrics --workspace {WORKSPACE}
-```
-
-The CLI reads all workspace data files and returns JSON:
-```json
-{
-  "total_candidates": 365,
-  "total_included": 42,
-  "total_excluded": 310,
-  "total_flagged": 13,
-  "snowball_depth_reached": 2,
-  "concepts_count": 28,
-  "extraction_complete_count": 42
-}
-```
-
-Take the returned metrics object and write it into the `metrics` field of `{WORKSPACE}/state.json`. Also update:
-- `discovery_saturation` and `conceptual_saturation` — these are read from phase-log.jsonl saturation_check events. After running the metrics CLI, read the most recent `saturation_check` events from `{WORKSPACE}/logs/phase-log.jsonl` and update those two fields in state.json.
-- `updated_at` — set to current ISO-8601 timestamp.
+`step` recounts every metric in `state.json` each time a phase completes, and returns them under `metrics`. To recount by hand: `python3 {PLUGIN_DIR}/lib/cli.py metrics --workspace {WORKSPACE}`.
 
 ---
 
@@ -708,7 +540,7 @@ Phase agents handle rate limit errors internally using exponential backoff. If a
 
 ### Agent Failure (agent returns without completing work)
 
-Check postconditions. If any postcondition fails, follow the retry logic in Section 4 Step F. The postcondition check tells you whether partial work was done. Include the failed postcondition context in the retry dispatch prompt so the agent knows what to fix.
+Call `step` as usual (Section 4). It runs the postconditions, and on a first failure returns `dispatch` with `retry: true` and the `failures`. Include them in the retry prompt so the agent knows what to fix.
 
 ### MCP Server Unavailable
 
