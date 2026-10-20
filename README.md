@@ -63,8 +63,11 @@ The state machine (phase transitions, retry bounds, status validity) and saturat
 |------|------------|
 | `spec/state.dfy` | Forward progress, no phase skipping, feedback bound, retry bound (≤1), terminal correctness, monotonic completion |
 | `spec/saturation.dfy` | Range [0,1], zero-denominator safety, termination threshold, feedback bound |
+| `lib/verified/ids.dfy` | Paper-ID matching: scheme prefixes (`doi:`, `s2:`, `arxiv:`, doi.org URLs), letter case and arXiv version suffixes never change a key; distinct plain IDs never collide |
+| `lib/verified/seed_set.dfy` | Phase 3 seed coverage: the check passes exactly when every seed is terminal or examined in both directions; empty-result markers count as evidence; only papers at the deepest level reached are exempt |
+| `lib/verified/postcond_p*.dfy`, `saturation.dfy`, `metrics.dfy`, `state.dfy`, `section_parser.dfy` | Per-phase postcondition soundness, completeness and determinism; record-level saturation and metric models |
 
-Python implementations in `lib/` mirror the Dafny specs and are tested (240 tests, pytest).
+Python implementations in `lib/` mirror the Dafny specs and are tested (254 tests, pytest). The test suite runs `dafny verify` on every proof file (`tests/test_dafny_proofs.py`, skipped when Dafny isn't installed), so a proof that stops verifying fails the build.
 
 ## Installation
 
