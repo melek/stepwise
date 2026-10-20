@@ -5,7 +5,7 @@ Autonomous systematic literature review plugin for Claude Code. Implements Kitch
 ## Commands
 
 ```bash
-# Run tests (240 tests, pytest)
+# Run tests (254 tests incl. Dafny proofs, pytest)
 cd stepwise && .venv/bin/python3 -m pytest tests/ -v
 
 # CLI subcommands (all output JSON to stdout)
