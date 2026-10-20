@@ -96,6 +96,16 @@ _CONCEPT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 _CITATION_PATTERN = re.compile(r"\[@([^\]]+)\]")
 
 
+def _no_id(record: dict, label: str, field: str = "id") -> str:
+    """Failure for a record missing the ID field a check matches on.
+
+    Agents occasionally write records with a drifted schema (`paper_id` for
+    `id`, say). Postconditions report that as a failure instead of raising,
+    so the orchestrator gets a RECOVERY with evidence, not a crash.
+    """
+    return f"{label} record has no {field!r} field (title: {record.get('title', '?')!r})"
+
+
 def _split_citation_keys(raw_match: str) -> list[str]:
     """Split a multi-citation match like 'key1; @key2' into individual keys."""
     return [p.strip() for p in re.split(r";\s*@?", raw_match) if p.strip()]
@@ -275,7 +285,9 @@ def check_no_duplicate_ids(candidates: list[dict]) -> tuple[bool, list[str]]:
     seen: dict[str, int] = {}
     duplicates = []
     for c in candidates:
-        cid = c["id"]
+        cid = c.get("id")
+        if not cid:
+            continue  # reported by check_minimum_metadata
         if cid in seen:
             duplicates.append(cid)
         seen[cid] = seen.get(cid, 0) + 1
@@ -344,10 +356,12 @@ def check_all_candidates_screened(
     final_decisions: set[str] = set()
     for entry in screening_log:
         if entry.get("decision") in ("include", "exclude"):
-            final_decisions.add(entry["paper_id"])
+            final_decisions.add(entry.get("paper_id"))
     failures = []
     for c in candidates:
-        if c["id"] not in final_decisions:
+        if not c.get("id"):
+            failures.append(_no_id(c, "Candidate"))
+        elif c["id"] not in final_decisions:
             failures.append(f"Candidate {c['id']} has no final screening decision")
     return _result(failures)
 
@@ -357,11 +371,13 @@ def check_included_consistency(
 ) -> tuple[bool, list[str]]:
     """Every included paper has a screening entry with decision == include."""
     include_decisions = {
-        e["paper_id"] for e in screening_log if e.get("decision") == "include"
+        e.get("paper_id") for e in screening_log if e.get("decision") == "include"
     }
     failures = []
     for p in included:
-        if p["id"] not in include_decisions:
+        if not p.get("id"):
+            failures.append(_no_id(p, "Included"))
+        elif p["id"] not in include_decisions:
             failures.append(f"Included paper {p['id']} has no 'include' screening decision")
     return _result(failures)
 
@@ -370,10 +386,12 @@ def check_no_orphan_inclusions(
     included: list[dict], candidates: list[dict]
 ) -> tuple[bool, list[str]]:
     """Every included paper exists in candidates."""
-    candidate_ids = {c["id"] for c in candidates}
+    candidate_ids = {c.get("id") for c in candidates}
     failures = []
     for p in included:
-        if p["id"] not in candidate_ids:
+        if not p.get("id"):
+            failures.append(_no_id(p, "Included"))
+        elif p["id"] not in candidate_ids:
             failures.append(f"Included paper {p['id']} not found in candidates")
     return _result(failures)
 
@@ -459,16 +477,19 @@ def check_all_seeds_examined(
     }
     forward_sources = {
         canonical_key(e["source_paper_id"])
-        for e in snowball_log if e.get("direction") == "forward"
+        for e in snowball_log if e.get("direction") == "forward" and e.get("source_paper_id")
     }
     backward_sources = {
         canonical_key(e["source_paper_id"])
-        for e in snowball_log if e.get("direction") == "backward"
+        for e in snowball_log if e.get("direction") == "backward" and e.get("source_paper_id")
     }
     failures = []
     for p in seed_papers:
-        pid = p["id"]
         keys = _record_keys(p)
+        if not keys:
+            failures.append(_no_id(p, "Seed"))
+            continue
+        pid = p.get("id") or sorted(keys)[0]
         if keys & terminal_leaves:
             continue
         missing = []
@@ -551,7 +572,10 @@ def check_new_inclusions_recorded(
     failures = []
     for e in snowball_log:
         if e.get("screening_decision") == "include":
-            pid = e["discovered_paper_id"]
+            pid = e.get("discovered_paper_id")
+            if not pid:
+                failures.append(_no_id(e, "Snowball include", "discovered_paper_id"))
+                continue
             if canonical_key(pid) not in included_ids:
                 failures.append(f"Snowball include {pid} not in included.jsonl")
             if canonical_key(pid) not in candidate_ids:
@@ -587,10 +611,12 @@ def check_phase3_all(
 def check_all_papers_extracted(
     included: list[dict], extractions: list[dict]
 ) -> tuple[bool, list[str]]:
-    extracted_ids = {e["paper_id"] for e in extractions}
+    extracted_ids = {e.get("paper_id") for e in extractions}
     failures = []
     for p in included:
-        if p["id"] not in extracted_ids:
+        if not p.get("id"):
+            failures.append(_no_id(p, "Included"))
+        elif p["id"] not in extracted_ids:
             failures.append(f"Paper {p['id']} not extracted")
     return _result(failures)
 
@@ -685,7 +711,10 @@ def check_all_papers_in_appendix(
     """Every included paper's id or bibtex_key appears in Appendix A."""
     failures = []
     for p in included:
-        pid = p["id"]
+        pid = p.get("id")
+        if not pid:
+            failures.append(_no_id(p, "Included"))
+            continue
         bkey = p.get("bibtex_key", "")
         if pid not in appendix_keys and bkey not in appendix_keys:
             failures.append(f"Paper {pid} missing from Appendix A")

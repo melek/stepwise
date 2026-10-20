@@ -5,13 +5,14 @@ Autonomous systematic literature review plugin for Claude Code. Implements Kitch
 ## Commands
 
 ```bash
-# Run tests (254 tests incl. Dafny proofs, pytest)
+# Run tests (278 tests incl. Dafny proofs, pytest)
 cd stepwise && .venv/bin/python3 -m pytest tests/ -v
 
 # CLI subcommands (all output JSON to stdout)
 python3 -m lib.cli metrics --workspace ~/research/my-project/
 python3 -m lib.cli postcondition --phase 2 --workspace ~/research/my-project/
 python3 -m lib.cli transition --action next --workspace ~/research/my-project/
+python3 -m lib.cli step --workspace ~/research/my-project/   # orchestrator: decide + apply next step
 python3 -m lib.cli saturation --type conceptual --k 5 --workspace ~/research/my-project/
 python3 -m lib.cli preprocess --type screening --workspace ~/research/my-project/
 python3 -m lib.cli prisma --type prisma2020 --workspace ~/research/my-project/

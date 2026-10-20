@@ -134,7 +134,9 @@ def preprocess_for_synthesis(
     paper_concepts: dict[str, set[str]] = {}
     paper_data: dict[str, dict] = {}
     for ext in extractions:
-        pid = ext["paper_id"]
+        pid = ext.get("paper_id")
+        if not pid:
+            continue
         paper_concepts[pid] = set(ext.get("concepts_identified", []))
         paper_data[pid] = ext
 
