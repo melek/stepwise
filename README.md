@@ -74,7 +74,7 @@ Python implementations in `lib/` mirror the Dafny specs and are tested (254 test
 Stepwise is a Claude Code plugin. Install from the `cc-lab` marketplace:
 
 ```
-claude plugin add stepwise@cc-lab
+claude plugins install stepwise@cc-lab
 ```
 
 Requires MCP servers for Semantic Scholar and arXiv (both required). PubMed, Unpaywall, Scite, paper-search-mcp, and Zotero are optional.
