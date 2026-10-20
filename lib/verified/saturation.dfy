@@ -1,7 +1,8 @@
 datatype SnowballEntry = SnowballEntry(
   depth_level: int,
   screening_decision: string,
-  already_known: bool
+  already_known: bool,
+  is_sentinel: bool  // empty-result marker: no discovered paper (issue #26)
 )
 
 datatype ConceptEntry = ConceptEntry(
@@ -12,12 +13,16 @@ datatype ConceptEntry = ConceptEntry(
 
 datatype Rational = Rational(num: int, denom: int)
 
+// Newly examined papers at a depth: real discoveries that weren't already
+// known. Already-known papers and empty-result markers are not new
+// examinations, so they don't dilute the yield (denominator).
 function CountAtDepth(log: seq<SnowballEntry>, depth: int): int
   ensures CountAtDepth(log, depth) >= 0
 {
   if |log| == 0 then 0
   else
-    (if log[0].depth_level == depth then 1 else 0) + CountAtDepth(log[1..], depth)
+    (if log[0].depth_level == depth && !log[0].already_known && !log[0].is_sentinel then 1 else 0)
+    + CountAtDepth(log[1..], depth)
 }
 
 function CountNewIncludesAtDepth(log: seq<SnowballEntry>, depth: int): int
@@ -25,7 +30,7 @@ function CountNewIncludesAtDepth(log: seq<SnowballEntry>, depth: int): int
 {
   if |log| == 0 then 0
   else
-    (if log[0].depth_level == depth && log[0].screening_decision == "include" && !log[0].already_known then 1 else 0)
+    (if log[0].depth_level == depth && log[0].screening_decision == "include" && !log[0].already_known && !log[0].is_sentinel then 1 else 0)
     + CountNewIncludesAtDepth(log[1..], depth)
 }
 

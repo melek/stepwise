@@ -8,6 +8,7 @@ datatype Candidate = Candidate(
   id: string,
   title: Option<string>,
   abstract_text: Option<string>,
+  abstract_gap_tagged: bool,  // metadata_gap contains "abstract" (issue #25)
   authors: seq<string>,
   year: Option<int>
 )
@@ -117,7 +118,7 @@ function CheckMinimumMetadataSingle(c: Candidate): seq<string>
 {
   var idFail := if c.id == "" then ["Candidate '' missing: id"] else [];
   var titleFail := if c.title.None? then ["Candidate '" + c.id + "' missing: title"] else [];
-  var abstractFail := if c.abstract_text.None? then ["Candidate '" + c.id + "' missing: abstract"] else [];
+  var abstractFail := if c.abstract_text.None? && !c.abstract_gap_tagged then ["Candidate '" + c.id + "' missing: abstract"] else [];
   var authorsFail := if |c.authors| == 0 then ["Candidate '" + c.id + "' missing: authors"] else [];
   var yearFail := if c.year.None? then ["Candidate '" + c.id + "' missing: year"] else [];
   idFail + titleFail + abstractFail + authorsFail + yearFail
@@ -125,7 +126,7 @@ function CheckMinimumMetadataSingle(c: Candidate): seq<string>
 
 function CandidateHasAllMetadata(c: Candidate): bool
 {
-  c.id != "" && c.title.Some? && c.abstract_text.Some? && |c.authors| > 0 && c.year.Some?
+  c.id != "" && c.title.Some? && (c.abstract_text.Some? || c.abstract_gap_tagged) && |c.authors| > 0 && c.year.Some?
 }
 
 function CheckMinimumMetadataHelper(candidates: seq<Candidate>, idx: nat): seq<string>
@@ -137,10 +138,32 @@ function CheckMinimumMetadataHelper(candidates: seq<Candidate>, idx: nat): seq<s
     CheckMinimumMetadataSingle(candidates[idx]) + CheckMinimumMetadataHelper(candidates, idx + 1)
 }
 
+// Candidates with no abstract, tagged or not.
+function CountAbstractGaps(candidates: seq<Candidate>, idx: nat): nat
+  requires idx <= |candidates|
+  decreases |candidates| - idx
+{
+  if idx == |candidates| then 0
+  else (if candidates[idx].abstract_text.None? then 1 else 0) + CountAbstractGaps(candidates, idx + 1)
+}
+
+// More than 1/4 of candidates without an abstract means the search itself
+// is suspect, tagged or not (MAX_ABSTRACT_GAP in lib/postconditions.py).
+predicate AbstractGapOverThreshold(candidates: seq<Candidate>)
+{
+  4 * CountAbstractGaps(candidates, 0) > |candidates|
+}
+
 function CheckMinimumMetadata(candidates: seq<Candidate>): CheckResult
 {
-  var failures := CheckMinimumMetadataHelper(candidates, 0);
+  var gapFail := if AbstractGapOverThreshold(candidates) then ["Abstract gap over threshold"] else [];
+  var failures := CheckMinimumMetadataHelper(candidates, 0) + gapFail;
   CheckResult(|failures| == 0, failures)
+}
+
+lemma MetadataSatisfiedBoundsAbstractGaps(candidates: seq<Candidate>)
+  ensures CheckMinimumMetadata(candidates).satisfied ==> 4 * CountAbstractGaps(candidates, 0) <= |candidates|
+{
 }
 
 ghost function CheckPhase1All(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>): CheckResult

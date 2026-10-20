@@ -18,7 +18,7 @@ The orchestrator executes these checks by reading the relevant files and verifyi
 1. **All queries executed:** For each database in the Search Terms table of `protocol.md`, the number of distinct query executions in `search-log.jsonl` for that database is at least equal to the number of queries specified in the protocol for that database. Database names are normalized to canonical form (e.g., `Semantic Scholar` → `semantic_scholar`).
 2. **Candidates non-empty:** `data/candidates.jsonl` contains at least one record.
 3. **No duplicate canonical IDs:** Extract the `id` field from every record in `candidates.jsonl`. No two records share the same `id`.
-4. **Minimum metadata:** Every record in `candidates.jsonl` has non-null values for: `id`, `title`, `abstract`, `authors`, `year`.
+4. **Minimum metadata:** Every record in `candidates.jsonl` has non-null values for: `id`, `title`, `abstract`, `authors`, `year`. A missing `abstract` is allowed when the record carries `metadata_gap: ["abstract"]` (the source API had none; screening excludes such papers under the insufficient-content criterion). If more than 25% of all records lack an abstract, tagged or not, the check fails: that points at the search itself, not at normal API gaps.
 
 **On failure:** Retry phase once. If still failing, record failure reason in `state.json` and terminate.
 
@@ -58,9 +58,9 @@ The orchestrator executes these checks by reading the relevant files and verifyi
 1. **Termination condition met:** At least one of:
    - Discovery saturation: the last `saturation_check` event in `phase-log.jsonl` shows `saturation_metric < θ_d`
    - Maximum depth: `snowball_depth_reached` in the log equals `max_snowball_depth` from protocol
-2. **All seed papers examined:** For every paper that was in `included.jsonl` at phase start, there exist entries in `snowball-log.jsonl` with that paper as `source_paper_id` for both `direction: forward` and `direction: backward` (or a log entry noting the paper was already snowballed).
+2. **All seed papers examined:** For every paper in `included.jsonl` that was a seed, there exist entries in `snowball-log.jsonl` with that paper as `source_paper_id` for both `direction: forward` and `direction: backward`. An empty-result marker (`discovered_paper_id: null`, `note: "empty_array_from_api"`) counts for its direction. Papers discovered at the deepest `depth_level` snowballing reached are terminal and exempt, whether it stopped at `max_snowball_depth` or on discovery saturation. IDs match across all of a paper's ID forms (`id`, `doi`, `arxiv_id`, `s2_id`), ignoring `doi:`/`s2:`/`arxiv:` prefixes and case.
 3. **Truncation logged:** For any snowball-log entry where `truncated = true`, `total_citations_available` and `citations_retrieved` are both non-null.
-4. **New inclusions recorded:** Every paper with `screening_decision = include` in `snowball-log.jsonl` exists in both `data/included.jsonl` and `data/candidates.jsonl`.
+4. **New inclusions recorded:** Every paper with `screening_decision = include` in `snowball-log.jsonl` exists in both `data/included.jsonl` and `data/candidates.jsonl`, matched across ID forms as in check 2 (a paper logged under its S2 ID may be stored under a promoted DOI).
 
 **On failure:** Retry phase once. If still failing, record failure and terminate.
 
@@ -155,12 +155,12 @@ Record the saturation metric and transition decision in `state.json` and `phase-
 Computed at each snowball depth level.
 
 ```
-θ_discovery = |newly_included_at_depth_d| / |total_examined_at_depth_d|
+θ_discovery = |newly_included_at_depth_d| / |newly_examined_at_depth_d|
 ```
 
 - Read `snowball-log.jsonl`, filter by `depth_level = d`
 - Count entries where `screening_decision = include` AND `already_known = false` → numerator
-- Count all entries at that depth → denominator
+- Count entries where `already_known = false` and `discovered_paper_id` is non-null → denominator. Already-known papers and empty-result markers are not new examinations.
 - If denominator = 0, saturation = 0 (terminate)
 - Compare against protocol's `discovery_saturation_threshold` (θ_d)
 - If `θ_discovery < θ_d` → discovery saturated, terminate snowballing

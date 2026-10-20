@@ -63,14 +63,16 @@ For each field in the extraction schema:
 1. Read abstract + metadata
 2. Extract what's available
 3. Record source_location as "abstract"
-4. Confidence ceiling is "medium" for most fields (abstract rarely contains full detail)
+4. Confidence ceiling is "medium" for fields inferred from the abstract (abstract rarely contains full detail)
+
+**Metadata fields (any source):** fields copied directly from the paper's record (`paper_id`, `title`, `year`, `venue`, and similar) use `source_location: "metadata"` and keep `high` confidence, even on abstract-only papers. The ceiling above applies only to what you infer from the abstract text. Don't downgrade metadata fields to satisfy it.
 
 Record each extraction:
 ```json
 {
   "field_name": "{name}",
   "value": "{extracted value}",
-  "source_location": "{section heading(s) or 'abstract'}",
+  "source_location": "{section heading(s), 'abstract', or 'metadata'}",
   "confidence": "high|medium|low"
 }
 ```

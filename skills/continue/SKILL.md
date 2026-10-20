@@ -27,7 +27,7 @@ Resume an existing systematic literature review from its last recorded state. Th
 |---------------|-------------|--------|
 | 0 | in_progress | Protocol definition incomplete. Re-enter Phase 0: read protocol.md (may be partial), continue filling fields interactively with user, get approval. |
 | 1-5 | completed | Advance to next phase. Update state.json: current_phase += 1, phase_status = pending. Enter orchestration loop. |
-| 1-5 | in_progress | Phase was interrupted mid-execution. Re-run current phase from scratch (agents are stateless, but postconditions will detect partial work). Enter orchestration loop. |
+| 1-5 | in_progress | Phase was interrupted. **Run its postcondition checks first.** If they pass, the work finished and only the bookkeeping was lost: log `phase_complete` with `"recovered": true`, mark the phase completed, and advance. If they fail, re-run the phase. Search and snowballing skip work already on disk; screening and extraction may redo some. Enter orchestration loop. |
 | 1-5 | failed | Report failure reason from state.json. Ask user: retry this phase, or revise protocol? If retry: reset phase_status to pending, enter orchestration loop. If revise: set current_phase = 0, phase_status = in_progress. |
 | 1-5 | pending | Phase ready to start. Enter orchestration loop. |
 | any | needs_protocol_revision | Phase 2 screening found no papers. Report the issue. Re-enter Phase 0 interactively to revise search terms or criteria. On new approval: reset to Phase 1, clear stale data files. |

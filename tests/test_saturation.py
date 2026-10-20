@@ -20,8 +20,9 @@ class TestDiscoverySaturation:
             {"depth_level": 1, "screening_decision": "include", "already_known": False},
             {"depth_level": 1, "screening_decision": "include", "already_known": True},
         ]
-        # 2 newly included out of 4 examined at depth 1
-        assert discovery_saturation(log, 1) == Fraction(2, 4)
+        # 2 newly included out of 3 newly examined at depth 1; the
+        # already-known paper is not a new examination
+        assert discovery_saturation(log, 1) == Fraction(2, 3)
 
     def test_empty_log(self):
         assert discovery_saturation([], 1) == Fraction(0)

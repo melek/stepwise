@@ -5,7 +5,7 @@ Autonomous systematic literature review plugin for Claude Code. Implements Kitch
 ## Commands
 
 ```bash
-# Run tests (85 tests, pytest)
+# Run tests (240 tests, pytest)
 cd stepwise && .venv/bin/python3 -m pytest tests/ -v
 
 # CLI subcommands (all output JSON to stdout)
@@ -45,7 +45,7 @@ All pure functions with no I/O (except `cli.py` which is the thin I/O shell).
 |--------|---------|-----------|
 | `state.py` | Phase state machine (6 phases, 5 statuses) | Dafny companion: `spec/state.dfy` |
 | `saturation.py` | Discovery and conceptual saturation (exact Fraction arithmetic) | Dafny companion: `spec/saturation.dfy` |
-| `postconditions.py` | Per-phase structural checks + per-record validators | Tested (85 tests) |
+| `postconditions.py` | Per-phase structural checks + per-record validators | Tested |
 | `oracle_contracts.py` | Named contracts wrapping validators with recovery and provenance | Tested |
 | `preprocess.py` | Deterministic preprocessing (screening evidence windows, synthesis concept clustering) | Tested |
 | `prisma.py` | PRISMA 2020 (27 items) + PRISMA-trAIce (7 items) compliance checking | Tested |
