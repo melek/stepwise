@@ -48,7 +48,7 @@ function CollectDatabases(queries: seq<ProtocolQuery>, idx: nat): set<string>
   else {queries[idx].database} + CollectDatabases(queries, idx + 1)
 }
 
-function CheckQueryCountsHelper(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): seq<string>
+ghost function CheckQueryCountsHelper(databases: set<string>, protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): seq<string>
 {
   // For each database, check count. Since sets are unordered, we check all at once.
   // A database fails if log count < protocol count.
@@ -58,8 +58,10 @@ function CheckQueryCountsHelper(databases: set<string>, protocol_queries: seq<Pr
   SetToFailures(failures)
 }
 
-// Convert a set of failing database names to a sequence of failure strings
-function SetToFailures(dbs: set<string>): seq<string>
+// Convert a set of failing database names to a sequence of failure strings.
+// Ghost: the order `:|` picks is not deterministic, so it can't be compiled;
+// these files are specifications, the implementation is lib/postconditions.py.
+ghost function SetToFailures(dbs: set<string>): seq<string>
 {
   if dbs == {} then []
   else
@@ -73,7 +75,7 @@ predicate AllDbCountsSatisfied(databases: set<string>, protocol_queries: seq<Pro
     CountEntriesForDb(db, search_log, 0) >= CountProtocolQueriesForDb(db, protocol_queries, 0)
 }
 
-function CheckQueryCountsPerDatabase(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): CheckResult
+ghost function CheckQueryCountsPerDatabase(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>): CheckResult
 {
   var databases := CollectDatabases(protocol_queries, 0);
   var failures := CheckQueryCountsHelper(databases, protocol_queries, search_log);
@@ -141,7 +143,7 @@ function CheckMinimumMetadata(candidates: seq<Candidate>): CheckResult
   CheckResult(|failures| == 0, failures)
 }
 
-function CheckPhase1All(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>): CheckResult
+ghost function CheckPhase1All(protocol_queries: seq<ProtocolQuery>, search_log: seq<SearchLogEntry>, candidates: seq<Candidate>): CheckResult
 {
   var r1 := CheckQueryCountsPerDatabase(protocol_queries, search_log);
   var r2 := CheckCandidatesNonEmpty(candidates);
@@ -186,7 +188,9 @@ lemma CheckQueryCountsHelperUnsatisfied(databases: set<string>, protocol_queries
   if !AllDbCountsSatisfied(databases, protocol_queries, search_log) {
     var failing := set db | db in databases &&
       CountEntriesForDb(db, search_log, 0) < CountProtocolQueriesForDb(db, protocol_queries, 0);
-    assert failing != {};
+    var db :| db in databases &&
+      CountEntriesForDb(db, search_log, 0) < CountProtocolQueriesForDb(db, protocol_queries, 0);
+    assert db in failing;
     SetToFailuresNonEmpty(failing);
   }
 }
