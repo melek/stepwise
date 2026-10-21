@@ -35,7 +35,7 @@ For each unscreened paper:
 For each IC:
 1. State the criterion and its testable condition
 2. Read the paper's title and abstract
-2a. If `{workspace}/data/preprocessed-screening.jsonl` exists: find the record matching this paper and criterion_id. Use the `evidence_window` field for focused evaluation. If insufficient, fall back to the full abstract.
+2a. If `{workspace}/data/preprocessed-screening.jsonl` exists: find the record whose `paper_id` and `criterion_id` match. Use its `evidence_window` field for focused evaluation. If insufficient, fall back to the full abstract in `candidates.jsonl`.
 3. Quote specific evidence from the abstract that supports or refutes the criterion
 4. Judge: `met` = yes | no | unclear
 5. Record:
