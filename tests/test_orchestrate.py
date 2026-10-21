@@ -201,3 +201,21 @@ def test_step_empty_screening_is_decision_stop(tmp_path):
     assert out["message"].startswith("DECISION REQUIRED:")
     assert _state(ws)["phase_status"] == "needs_protocol_revision"
     assert _state(ws)["phase_history"][0]["completed_at"] is not None
+
+
+def test_screening_preprocess_null_abstract_and_paper_id(tmp_path):
+    from lib.cli import run_preprocess
+    ws = _workspace(tmp_path, 2, "pending")
+    (ws / "protocol.md").write_text(
+        "| IC1 | Topic | Studies search term selection |\n| EC1 | Off-topic | Unrelated to search |\n")
+    candidates = [
+        {"id": "p1", "title": "Term selection", "abstract": "We study search terms. It works."},
+        {"id": "p2", "title": None, "abstract": None, "metadata_gap": ["abstract"]},
+    ]
+    (ws / "data" / "candidates.jsonl").write_text("".join(json.dumps(c) + "\n" for c in candidates))
+    run_preprocess(ws, "screening")
+    rows = [json.loads(l) for l in (ws / "data" / "preprocessed-screening.jsonl").read_text().splitlines()]
+    assert {(r["paper_id"], r["criterion_id"]) for r in rows} == {
+        ("p1", "IC1"), ("p1", "EC1"), ("p2", "IC1"), ("p2", "EC1")}
+    assert all("full_abstract" not in r for r in rows)
+    assert all(r["evidence_window"] == "" for r in rows if r["paper_id"] == "p2")

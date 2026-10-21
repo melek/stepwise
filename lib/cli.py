@@ -687,12 +687,17 @@ def run_preprocess(workspace: Path, kind: str) -> dict:
         criteria = _parse_protocol_criteria(workspace)
         results = []
         for candidate in data["candidates"]:
+            # A missing abstract is stored as null, not absent (issue #37).
             result = prep.preprocess_for_screening(
-                candidate.get("abstract", ""),
-                candidate.get("title", ""),
+                candidate.get("abstract") or "",
+                candidate.get("title") or "",
                 criteria,
             )
-            results.extend(result)
+            # Key each record to its paper; the abstract itself stays in
+            # candidates.jsonl rather than repeating per criterion (#38).
+            for r in result:
+                r.pop("full_abstract", None)
+                results.append({"paper_id": candidate.get("id"), **r})
         output_path = workspace / "data" / "preprocessed-screening.jsonl"
         with open(output_path, "w") as f:
             for r in results:
